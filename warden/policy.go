@@ -1,6 +1,7 @@
 package warden
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -41,7 +42,11 @@ type Policy struct {
 }
 
 func DefaultPolicy() Policy {
-	return Policy{roleScopes: map[string][]string{
+	return Policy{roleScopes: DefaultRoleScopes()}
+}
+
+func DefaultRoleScopes() map[string][]string {
+	return copyRoleScopes(map[string][]string{
 		RolePlatformOwner: allScopes(),
 		RolePlatformAdmin: allScopes(),
 		RoleTenantOwner:   allScopes(),
@@ -69,7 +74,37 @@ func DefaultPolicy() Policy {
 		RoleAssetHubEditor:    {internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeAssetHubWrite},
 		RoleSkillHubPublisher: {internaljwt.ScopeSkillHubRead, internaljwt.ScopeSkillHubPublish, internaljwt.ScopeSkillHubWrite},
 		RoleFrontendUser:      {internaljwt.ScopeSynapseRead},
-	}}
+	})
+}
+
+func NewPolicy(roleScopes map[string][]string) (Policy, error) {
+	if len(roleScopes) == 0 {
+		return DefaultPolicy(), nil
+	}
+	normalized := make(map[string][]string, len(roleScopes))
+	for role, scopes := range roleScopes {
+		key, ok := NormalizeRoleKey(role)
+		if !ok {
+			return Policy{}, fmt.Errorf("unknown role %q", role)
+		}
+		set := map[string]bool{}
+		for _, scope := range scopes {
+			scope = strings.TrimSpace(scope)
+			if scope == "" {
+				continue
+			}
+			set[scope] = true
+		}
+		normalized[key] = sortedKeys(set)
+	}
+	return Policy{roleScopes: normalized}, nil
+}
+
+func (p Policy) RoleScopes() map[string][]string {
+	if p.roleScopes == nil {
+		return DefaultRoleScopes()
+	}
+	return copyRoleScopes(p.roleScopes)
 }
 
 func NormalizeRoleKey(role string) (string, bool) {
@@ -252,5 +287,15 @@ func sortedKeys(set map[string]bool) []string {
 		out = append(out, value)
 	}
 	sort.Strings(out)
+	return out
+}
+
+func copyRoleScopes(in map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(in))
+	for role, scopes := range in {
+		copied := append([]string(nil), scopes...)
+		sort.Strings(copied)
+		out[role] = copied
+	}
 	return out
 }
