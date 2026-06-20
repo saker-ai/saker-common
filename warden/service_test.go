@@ -132,7 +132,7 @@ func TestCreateServiceAccountTokenSignsAsServiceAccount(t *testing.T) {
 	created, err := svc.CreateServiceAccountToken(ctx, CreateServiceAccountRequest{
 		SessionID: session.ID,
 		Name:      "synapse-filestorage",
-		Scopes:    []string{internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload},
+		Scopes:    []string{internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeWebHubNotificationsWrite},
 		Now:       testNow(),
 	})
 	if err != nil {
@@ -157,6 +157,19 @@ func TestCreateServiceAccountTokenSignsAsServiceAccount(t *testing.T) {
 	}
 	if result.Claims.PrincipalType != PrincipalTypeServiceAccount || result.Claims.PrincipalID != created.ServiceAccountID || !has(result.Claims.Scopes, internaljwt.ScopeAssetHubUpload) {
 		t.Fatalf("claims = %+v", result.Claims)
+	}
+	result, err = svc.SignInternalJWT(ctx, InternalJWTRequest{
+		APIKey:   created.Token,
+		Audience: internaljwt.AudienceWebHub,
+		Actions:  []string{"notifications:write"},
+		Now:      testNow(),
+		JWTID:    "jwt-webhub-notify",
+	})
+	if err != nil {
+		t.Fatalf("SignInternalJWT webhub notifications: %v", err)
+	}
+	if result.Claims.Audience != internaljwt.AudienceWebHub || !has(result.Claims.Scopes, internaljwt.ScopeWebHubNotificationsWrite) {
+		t.Fatalf("webhub notification claims = %+v", result.Claims)
 	}
 	_, err = svc.SignInternalJWT(ctx, InternalJWTRequest{
 		APIKey:   created.Token,

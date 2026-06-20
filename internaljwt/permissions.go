@@ -7,6 +7,7 @@ const (
 	AudienceFileStore = "filestore"
 	AudienceSaker     = "saker"
 	AudienceSynapse   = "synapse"
+	AudienceWebHub    = "webhub"
 
 	PrincipalTypeUser           = "user"
 	PrincipalTypeAPIKey         = "api_key"
@@ -44,6 +45,8 @@ const (
 	ScopeSynapseRead  = "synapse:read"
 	ScopeSynapseWrite = "synapse:write"
 	ScopeSynapseAdmin = "synapse:admin"
+
+	ScopeWebHubNotificationsWrite = "webhub:notifications:write"
 )
 
 func DefaultScopesForAudience(audience string) []string {
@@ -58,6 +61,8 @@ func DefaultScopesForAudience(audience string) []string {
 		return []string{ScopeFileStoreRead, ScopeFileStoreWrite}
 	case AudienceSaker:
 		return []string{ScopeSakerRun, ScopeSakerToolExecute}
+	case AudienceWebHub:
+		return []string{ScopeWebHubNotificationsWrite}
 	default:
 		return nil
 	}

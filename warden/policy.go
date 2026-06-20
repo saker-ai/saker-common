@@ -203,6 +203,11 @@ func scopesForAction(audience, action string) []string {
 		case "admin":
 			return []string{internaljwt.ScopeSynapseAdmin}
 		}
+	case internaljwt.AudienceWebHub:
+		switch action {
+		case "notifications:write", "notify", "write":
+			return []string{internaljwt.ScopeWebHubNotificationsWrite}
+		}
 	}
 	return nil
 }
@@ -215,6 +220,7 @@ func allScopes() []string {
 		internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeAssetHubWrite, internaljwt.ScopeAssetHubAdmin,
 		internaljwt.ScopeSkillHubRead, internaljwt.ScopeSkillHubWrite, internaljwt.ScopeSkillHubPublish, internaljwt.ScopeSkillHubAdmin,
 		internaljwt.ScopeFileStoreRead, internaljwt.ScopeFileStoreWrite, internaljwt.ScopeFileStoreAdmin,
+		internaljwt.ScopeWebHubNotificationsWrite,
 	}
 }
 

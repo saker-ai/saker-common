@@ -145,7 +145,7 @@ func TestHTTPHandlerInternalJWTWithAPIKey(t *testing.T) {
 	svc, store := newTestService(t)
 	seedPrincipal(t, ctx, store, Principal{
 		ID: "principal-a", TenantID: "tenant-a", Type: PrincipalTypeUser, Status: "active",
-		Roles: []RoleGrant{{Key: RoleAssetHubEditor}},
+		Roles: []RoleGrant{{Key: RoleTenantAdmin}},
 	})
 	session, err := svc.CreateSession(ctx, "principal-a", testNow())
 	if err != nil {
@@ -154,7 +154,7 @@ func TestHTTPHandlerInternalJWTWithAPIKey(t *testing.T) {
 	created, err := svc.CreateAPIKey(ctx, CreateAPIKeyRequest{
 		SessionID: session.ID,
 		Name:      "developer laptop",
-		Scopes:    []string{internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload},
+		Scopes:    []string{internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeWebHubNotificationsWrite},
 		Now:       testNow(),
 	})
 	if err != nil {
@@ -174,6 +174,19 @@ func TestHTTPHandlerInternalJWTWithAPIKey(t *testing.T) {
 	}
 	if result.Token == "" || result.Claims.Source != SessionSourceAPIKey || !has(result.Claims.Scopes, internaljwt.ScopeAssetHubUpload) {
 		t.Fatalf("claims = %+v", result.Claims)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/internal/internal-jwts", bytes.NewBufferString(`{"api_key":"`+created.Token+`","audience":"webhub","actions":["notifications:write"]}`))
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("webhub jwt status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Token == "" || result.Claims.Audience != internaljwt.AudienceWebHub || !has(result.Claims.Scopes, internaljwt.ScopeWebHubNotificationsWrite) {
+		t.Fatalf("webhub claims = %+v", result.Claims)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/iam/api-keys", nil)
