@@ -67,6 +67,57 @@ func TestIdentityContextAndInternalJWT(t *testing.T) {
 	}
 }
 
+func TestUpdatePolicyAffectsRuntimeAuthorization(t *testing.T) {
+	ctx := context.Background()
+	policy, err := NewPolicy(map[string][]string{
+		RoleTenantViewer: {internaljwt.ScopeSkillHubRead},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewMemoryStore()
+	svc, err := NewService(Config{Issuer: "warden", MasterSecret: testSecret, InternalTTL: 5 * time.Minute, Policy: policy}, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedPrincipal(t, ctx, store, Principal{
+		ID: "principal-a", TenantID: "tenant-a", Type: PrincipalTypeUser, Status: "active",
+		Roles: []RoleGrant{{Key: RoleTenantViewer}},
+	})
+	session, err := svc.CreateSession(ctx, "principal-a", testNow())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SignInternalJWT(ctx, InternalJWTRequest{
+		SessionID: session.ID,
+		Audience:  internaljwt.AudienceAssetHub,
+		Actions:   []string{"read"},
+		Now:       testNow(),
+	}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("SignInternalJWT before policy update err = %v, want ErrForbidden", err)
+	}
+
+	updated, err := NewPolicy(map[string][]string{
+		RoleTenantViewer: {internaljwt.ScopeAssetHubRead},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.UpdatePolicy(updated)
+	result, err := svc.SignInternalJWT(ctx, InternalJWTRequest{
+		SessionID: session.ID,
+		Audience:  internaljwt.AudienceAssetHub,
+		Actions:   []string{"read"},
+		Now:       testNow(),
+	})
+	if err != nil {
+		t.Fatalf("SignInternalJWT after policy update: %v", err)
+	}
+	if !has(result.Claims.Scopes, internaljwt.ScopeAssetHubRead) {
+		t.Fatalf("scopes after update = %v", result.Claims.Scopes)
+	}
+}
+
 func TestAPIKeyStoresOnlyHashAndValidates(t *testing.T) {
 	ctx := context.Background()
 	svc, store := newTestService(t)

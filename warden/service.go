@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/saker-ai/saker-common/internaljwt"
@@ -32,6 +33,7 @@ type Service struct {
 	cfg            Config
 	store          Store
 	signer         *internaljwt.Signer
+	policyMu       sync.RWMutex
 	policy         Policy
 	oidcVerifier   *OIDCVerifier
 	tokenExchanger OIDCTokenExchanger
@@ -75,6 +77,32 @@ func NewService(cfg Config, store Store) (*Service, error) {
 }
 
 func (s *Service) Store() Store { return s.store }
+
+func (s *Service) UpdatePolicy(policy Policy) {
+	if policy.roleScopes == nil {
+		policy = DefaultPolicy()
+	}
+	s.policyMu.Lock()
+	s.policy = policy
+	s.policyMu.Unlock()
+}
+
+func (s *Service) Policy() Policy {
+	s.policyMu.RLock()
+	defer s.policyMu.RUnlock()
+	if s.policy.roleScopes == nil {
+		return DefaultPolicy()
+	}
+	return Policy{roleScopes: s.policy.RoleScopes()}
+}
+
+func (s *Service) scopesForRoles(roles []RoleGrant) []string {
+	return s.Policy().ScopesForRoles(roles)
+}
+
+func (s *Service) scopesForActions(roles []RoleGrant, audience string, actions []string) []string {
+	return s.Policy().ScopesForActions(roles, audience, actions)
+}
 
 func (s *Service) PutOIDCLoginState(ctx context.Context, state OIDCLoginState) error {
 	if strings.TrimSpace(state.State) == "" || strings.TrimSpace(state.Nonce) == "" || strings.TrimSpace(state.CodeVerifier) == "" {
@@ -200,7 +228,7 @@ func (s *Service) ExchangeDeviceToken(ctx context.Context, req DeviceTokenReques
 	expiresAt := now.Add(30 * 24 * time.Hour)
 	key := APIKey{
 		ID: "key_" + randomString(), TenantID: principal.TenantID, PrincipalType: principal.Type, PrincipalID: principal.ID,
-		KeyHash: HashAPIKey(token), Scopes: s.policy.ScopesForRoles(principal.Roles), ExpiresAt: expiresAt, Status: "active", CreatedAt: now,
+		KeyHash: HashAPIKey(token), Scopes: s.scopesForRoles(principal.Roles), ExpiresAt: expiresAt, Status: "active", CreatedAt: now,
 	}
 	if err := s.store.PutAPIKey(ctx, key); err != nil {
 		return DeviceTokenResult{}, err
@@ -308,7 +336,7 @@ func (s *Service) IdentityContext(ctx context.Context, sessionID string, now tim
 	if err != nil {
 		return IdentityContext{}, err
 	}
-	scopes := s.policy.ScopesForRoles(principal.Roles)
+	scopes := s.scopesForRoles(principal.Roles)
 	roleKeys := make([]string, 0, len(principal.Roles))
 	for _, role := range principal.Roles {
 		if key, ok := NormalizeRoleKey(role.Key); ok {
@@ -452,7 +480,7 @@ func (s *Service) SignInternalJWT(ctx context.Context, req InternalJWTRequest) (
 	if err != nil {
 		return InternalJWTResult{}, err
 	}
-	scopes := s.policy.ScopesForActions(principal.Roles, req.Audience, req.Actions)
+	scopes := s.scopesForActions(principal.Roles, req.Audience, req.Actions)
 	if len(scopes) == 0 {
 		s.audit(ctx, principal, "internal_jwt.sign", req.Resource, "deny", "")
 		return InternalJWTResult{}, ErrForbidden
@@ -498,7 +526,7 @@ func (s *Service) signInternalJWTForClientCredentials(ctx context.Context, req I
 	}); err != nil {
 		return InternalJWTResult{}, err
 	}
-	requested := s.policy.ScopesForActions(principal.Roles, req.Audience, req.Actions)
+	requested := s.scopesForActions(principal.Roles, req.Audience, req.Actions)
 	scopes := intersectScopes(scopesFromToken, requested)
 	if len(scopes) == 0 {
 		s.audit(ctx, principal, "internal_jwt.sign", req.Resource, "deny", "")
@@ -516,7 +544,7 @@ func (s *Service) signInternalJWTForAPIKey(ctx context.Context, req InternalJWTR
 	if err != nil {
 		return InternalJWTResult{}, err
 	}
-	requested := s.policy.ScopesForActions(principal.Roles, req.Audience, req.Actions)
+	requested := s.scopesForActions(principal.Roles, req.Audience, req.Actions)
 	scopes := intersectScopes(key.Scopes, requested)
 	if len(scopes) == 0 {
 		s.audit(ctx, principal, "internal_jwt.sign", req.Resource, "deny", "")
@@ -538,7 +566,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, req CreateAPIKeyRequest) (Cr
 	if err != nil {
 		return CreatedAPIKey{}, err
 	}
-	allowed := sliceSet(s.policy.ScopesForRoles(principal.Roles))
+	allowed := sliceSet(s.scopesForRoles(principal.Roles))
 	for _, scope := range req.Scopes {
 		if !allowed[scope] {
 			return CreatedAPIKey{}, ErrForbidden
@@ -577,7 +605,7 @@ func (s *Service) CreateServiceAccountToken(ctx context.Context, req CreateServi
 	if name == "" {
 		return CreatedServiceAccountToken{}, ErrInvalidInput
 	}
-	allowed := sliceSet(s.policy.ScopesForRoles(creator.Roles))
+	allowed := sliceSet(s.scopesForRoles(creator.Roles))
 	for _, scope := range req.Scopes {
 		if !allowed[scope] {
 			return CreatedServiceAccountToken{}, ErrForbidden
@@ -784,7 +812,7 @@ func (s *Service) DelegateAgent(ctx context.Context, req DelegateAgentRequest) (
 	if err != nil {
 		return InternalJWTResult{}, err
 	}
-	actorScopes := s.policy.ScopesForActions(actor.Roles, req.Audience, req.Actions)
+	actorScopes := s.scopesForActions(actor.Roles, req.Audience, req.Actions)
 	delegatedScopes := req.Scopes
 	if len(delegatedScopes) == 0 {
 		delegatedScopes = actorScopes
