@@ -8,6 +8,10 @@ const (
 	AudienceSaker     = "saker"
 	AudienceSynapse   = "synapse"
 	AudienceWebHub    = "webhub"
+	AudienceAIHub     = "aihub"
+	AudienceStockHub  = "stockhub"
+	AudienceKnowHub   = "knowhub"
+	AudienceWarden    = "warden"
 
 	PrincipalTypeUser           = "user"
 	PrincipalTypeAPIKey         = "api_key"
@@ -47,6 +51,26 @@ const (
 	ScopeSynapseAdmin = "synapse:admin"
 
 	ScopeWebHubNotificationsWrite = "webhub:notifications:write"
+
+	ScopeAIHubRead   = "aihub:read"
+	ScopeAIHubInvoke = "aihub:invoke"
+	ScopeAIHubAdmin  = "aihub:admin"
+
+	ScopeStockHubRead     = "stockhub:read"
+	ScopeStockHubRetrieve = "stockhub:retrieve"
+	ScopeStockHubUpload   = "stockhub:upload"
+	ScopeStockHubWrite    = "stockhub:write"
+	ScopeStockHubReview   = "stockhub:review"
+	ScopeStockHubAdmin    = "stockhub:admin"
+
+	ScopeKnowHubRead     = "knowhub:read"
+	ScopeKnowHubRetrieve = "knowhub:retrieve"
+	ScopeKnowHubWrite    = "knowhub:write"
+	ScopeKnowHubAdmin    = "knowhub:admin"
+
+	ScopeWardenRead  = "warden:read"
+	ScopeWardenWrite = "warden:write"
+	ScopeWardenAdmin = "warden:admin"
 )
 
 func DefaultScopesForAudience(audience string) []string {
@@ -63,6 +87,14 @@ func DefaultScopesForAudience(audience string) []string {
 		return []string{ScopeSakerRun, ScopeSakerToolExecute}
 	case AudienceWebHub:
 		return []string{ScopeWebHubNotificationsWrite}
+	case AudienceAIHub:
+		return []string{ScopeAIHubRead, ScopeAIHubInvoke}
+	case AudienceStockHub:
+		return []string{ScopeStockHubRead, ScopeStockHubRetrieve}
+	case AudienceKnowHub:
+		return []string{ScopeKnowHubRead, ScopeKnowHubRetrieve}
+	case AudienceWarden:
+		return []string{ScopeWardenRead}
 	default:
 		return nil
 	}

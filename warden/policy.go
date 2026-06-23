@@ -22,6 +22,9 @@ const (
 	RoleChatHubUser       = "app.chathub.user"
 	RoleAssetHubEditor    = "app.assethub.editor"
 	RoleSkillHubPublisher = "app.skillhub.publisher"
+	RoleAIHubUser         = "app.aihub.user"
+	RoleAIHubViewer       = "app.aihub.viewer"
+	RoleAIHubAdmin        = "app.aihub.admin"
 	RoleFrontendUser      = "frontend.user"
 )
 
@@ -30,11 +33,13 @@ var knownRoleKeys = map[string]bool{
 	RoleTenantOwner: true, RoleTenantAdmin: true, RoleTenantOperator: true, RoleTenantViewer: true,
 	RoleTeamAdmin: true, RoleTeamEditor: true, RoleTeamViewer: true,
 	RoleSakerRunner: true, RoleChatHubUser: true, RoleAssetHubEditor: true, RoleSkillHubPublisher: true,
+	RoleAIHubUser: true, RoleAIHubViewer: true, RoleAIHubAdmin: true,
 	RoleFrontendUser: true,
 }
 
 var shorthandRoles = map[string]string{
 	"owner": RoleTenantOwner, "admin": RoleTenantAdmin, "operator": RoleTenantOperator, "viewer": RoleTenantViewer,
+	"user": RoleFrontendUser, "moderator": RoleSkillHubPublisher,
 }
 
 type Policy struct {
@@ -58,6 +63,9 @@ func DefaultRoleScopes() map[string][]string {
 			internaljwt.ScopeSkillHubRead, internaljwt.ScopeSkillHubWrite,
 			internaljwt.ScopeFileStoreRead, internaljwt.ScopeFileStoreWrite,
 			internaljwt.ScopeSakerRun, internaljwt.ScopeSakerToolExecute,
+			internaljwt.ScopeAIHubRead, internaljwt.ScopeAIHubInvoke,
+			internaljwt.ScopeStockHubRead, internaljwt.ScopeStockHubRetrieve, internaljwt.ScopeStockHubUpload, internaljwt.ScopeStockHubWrite,
+			internaljwt.ScopeWardenRead, internaljwt.ScopeWardenWrite,
 		},
 		RoleTenantViewer: {
 			internaljwt.ScopeSynapseRead,
@@ -65,6 +73,9 @@ func DefaultRoleScopes() map[string][]string {
 			internaljwt.ScopeAssetHubRead,
 			internaljwt.ScopeSkillHubRead,
 			internaljwt.ScopeFileStoreRead,
+			internaljwt.ScopeAIHubRead,
+			internaljwt.ScopeStockHubRead, internaljwt.ScopeStockHubRetrieve,
+			internaljwt.ScopeWardenRead,
 		},
 		RoleTeamAdmin:         {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite, internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeAssetHubWrite},
 		RoleTeamEditor:        {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite, internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload},
@@ -73,7 +84,10 @@ func DefaultRoleScopes() map[string][]string {
 		RoleChatHubUser:       {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite},
 		RoleAssetHubEditor:    {internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeAssetHubWrite},
 		RoleSkillHubPublisher: {internaljwt.ScopeSkillHubRead, internaljwt.ScopeSkillHubPublish, internaljwt.ScopeSkillHubWrite},
-		RoleFrontendUser:      {internaljwt.ScopeSynapseRead},
+		RoleAIHubUser:         {internaljwt.ScopeAIHubRead, internaljwt.ScopeAIHubInvoke},
+		RoleAIHubViewer:       {internaljwt.ScopeAIHubRead},
+		RoleAIHubAdmin:        {internaljwt.ScopeAIHubRead, internaljwt.ScopeAIHubInvoke, internaljwt.ScopeAIHubAdmin},
+		RoleFrontendUser:      {internaljwt.ScopeSynapseRead, internaljwt.ScopeAIHubRead, internaljwt.ScopeAIHubInvoke, internaljwt.ScopeStockHubRead, internaljwt.ScopeStockHubRetrieve, internaljwt.ScopeWardenRead},
 	})
 }
 
@@ -243,6 +257,39 @@ func scopesForAction(audience, action string) []string {
 		case "notifications:write", "notify", "write":
 			return []string{internaljwt.ScopeWebHubNotificationsWrite}
 		}
+	case internaljwt.AudienceAIHub:
+		switch action {
+		case "read", "list":
+			return []string{internaljwt.ScopeAIHubRead}
+		case "invoke", "run", "write", "update", "delete":
+			return []string{internaljwt.ScopeAIHubInvoke}
+		case "admin":
+			return []string{internaljwt.ScopeAIHubAdmin}
+		}
+	case internaljwt.AudienceStockHub:
+		switch action {
+		case "read", "list", "search":
+			return []string{internaljwt.ScopeStockHubRead}
+		case "retrieve":
+			return []string{internaljwt.ScopeStockHubRetrieve}
+		case "upload", "create":
+			return []string{internaljwt.ScopeStockHubUpload}
+		case "write", "update", "delete", "archive":
+			return []string{internaljwt.ScopeStockHubWrite}
+		case "review", "publish":
+			return []string{internaljwt.ScopeStockHubReview}
+		case "admin":
+			return []string{internaljwt.ScopeStockHubAdmin}
+		}
+	case internaljwt.AudienceWarden:
+		switch action {
+		case "read", "list":
+			return []string{internaljwt.ScopeWardenRead}
+		case "write", "update", "delete":
+			return []string{internaljwt.ScopeWardenWrite}
+		case "admin":
+			return []string{internaljwt.ScopeWardenAdmin}
+		}
 	}
 	return nil
 }
@@ -256,6 +303,9 @@ func allScopes() []string {
 		internaljwt.ScopeSkillHubRead, internaljwt.ScopeSkillHubWrite, internaljwt.ScopeSkillHubPublish, internaljwt.ScopeSkillHubAdmin,
 		internaljwt.ScopeFileStoreRead, internaljwt.ScopeFileStoreWrite, internaljwt.ScopeFileStoreAdmin,
 		internaljwt.ScopeWebHubNotificationsWrite,
+		internaljwt.ScopeAIHubRead, internaljwt.ScopeAIHubInvoke, internaljwt.ScopeAIHubAdmin,
+		internaljwt.ScopeStockHubRead, internaljwt.ScopeStockHubRetrieve, internaljwt.ScopeStockHubUpload, internaljwt.ScopeStockHubWrite, internaljwt.ScopeStockHubReview, internaljwt.ScopeStockHubAdmin,
+		internaljwt.ScopeWardenRead, internaljwt.ScopeWardenWrite, internaljwt.ScopeWardenAdmin,
 	}
 }
 

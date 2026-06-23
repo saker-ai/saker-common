@@ -31,3 +31,29 @@ func TestDefaultRoleScopesReturnsCopy(t *testing.T) {
 		t.Fatal("DefaultRoleScopes returned shared mutable state")
 	}
 }
+
+func TestDefaultPolicyCoversStockHub(t *testing.T) {
+	policy := DefaultPolicy()
+	scopes := policy.ScopesForRoles([]RoleGrant{{Key: RoleTenantAdmin}})
+	for _, want := range []string{internaljwt.ScopeStockHubRead, internaljwt.ScopeStockHubRetrieve, internaljwt.ScopeStockHubAdmin} {
+		if !has(scopes, want) {
+			t.Fatalf("tenant admin scopes missing %q in %v", want, scopes)
+		}
+	}
+	if got := scopesForAction(internaljwt.AudienceStockHub, "retrieve"); len(got) != 1 || got[0] != internaljwt.ScopeStockHubRetrieve {
+		t.Fatalf("stockhub retrieve scopes = %v", got)
+	}
+}
+
+func TestDefaultPolicyCoversWarden(t *testing.T) {
+	policy := DefaultPolicy()
+	scopes := policy.ScopesForRoles([]RoleGrant{{Key: RoleTenantAdmin}})
+	for _, want := range []string{internaljwt.ScopeWardenRead, internaljwt.ScopeWardenWrite, internaljwt.ScopeWardenAdmin} {
+		if !has(scopes, want) {
+			t.Fatalf("tenant admin scopes missing %q in %v", want, scopes)
+		}
+	}
+	if got := scopesForAction(internaljwt.AudienceWarden, "read"); len(got) != 1 || got[0] != internaljwt.ScopeWardenRead {
+		t.Fatalf("warden read scopes = %v", got)
+	}
+}
