@@ -71,7 +71,7 @@ func TestVerifierRejectsWrongAudience(t *testing.T) {
 	}
 	verifier, _ := NewVerifier(VerifierOptions{
 		Issuer:       "synapse",
-		Audience:     "assethub",
+		Audience:     "filehub",
 		MasterSecret: testSecret,
 		Now:          func() time.Time { return now },
 	})
@@ -149,10 +149,11 @@ func TestDefaultScopesForAudience(t *testing.T) {
 		want     string
 	}{
 		{name: "skillhub", audience: AudienceSkillHub, want: ScopeSkillHubWrite},
-		{name: "assethub", audience: AudienceAssetHub, want: ScopeAssetHubUpload},
+		{name: "filehub", audience: AudienceFileHub, want: ScopeFileHubUpload},
 		{name: "chathub", audience: AudienceChatHub, want: ScopeChatHubWrite},
 		{name: "filestore", audience: AudienceFileStore, want: ScopeFileStoreWrite},
 		{name: "saker", audience: AudienceSaker, want: ScopeSakerToolExecute},
+		{name: "knowhub", audience: AudienceKnowHub, want: ScopeKnowHubRetrieve},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -168,10 +169,65 @@ func TestDefaultScopesForAudience(t *testing.T) {
 }
 
 func TestHasAnyScope(t *testing.T) {
-	if !HasAnyScope([]string{ScopeAssetHubRead}, ScopeAssetHubWrite, ScopeAssetHubRead) {
+	if !HasAnyScope([]string{ScopeFileHubRead}, ScopeFileHubWrite, ScopeFileHubRead) {
 		t.Fatal("HasAnyScope returned false for matching scope")
 	}
-	if HasAnyScope([]string{ScopeAssetHubRead}, ScopeSkillHubRead, ScopeAssetHubWrite) {
+	if HasAnyScope([]string{ScopeFileHubRead}, ScopeSkillHubRead, ScopeFileHubWrite) {
 		t.Fatal("HasAnyScope returned true without matching scope")
+	}
+}
+
+func TestSignEmbedsPolicyVersion(t *testing.T) {
+	now := time.Date(2026, 6, 21, 12, 0, 0, 0, time.UTC)
+	signer, _ := NewSigner("synapse", testSecret, 5*time.Minute)
+	token, claims, err := signer.Sign(SignInput{
+		Audience:      "skillhub",
+		TenantID:      "tenant-a",
+		PrincipalType: "user",
+		PrincipalID:   "user-a",
+		Scopes:        []string{"skillhub:read"},
+		Now:           now,
+		JWTID:         "jwt-a",
+		PolicyVersion: "builtin-2026-06-20",
+	})
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	if claims.PolicyVersion != "builtin-2026-06-20" {
+		t.Fatalf("claims.PolicyVersion = %q", claims.PolicyVersion)
+	}
+	verifier, _ := NewVerifier(VerifierOptions{
+		Issuer:       "synapse",
+		Audience:     "skillhub",
+		MasterSecret: testSecret,
+		TTL:          5 * time.Minute,
+		Now:          func() time.Time { return now.Add(time.Minute) },
+	})
+	principal, err := verifier.Verify(token)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if principal.Claims.PolicyVersion != "builtin-2026-06-20" {
+		t.Fatalf("principal.Claims.PolicyVersion = %q", principal.Claims.PolicyVersion)
+	}
+}
+
+func TestSignTrimsPolicyVersion(t *testing.T) {
+	now := time.Date(2026, 6, 21, 12, 0, 0, 0, time.UTC)
+	signer, _ := NewSigner("synapse", testSecret, 5*time.Minute)
+	_, claims, err := signer.Sign(SignInput{
+		Audience:      "skillhub",
+		TenantID:      "tenant-a",
+		PrincipalType: "user",
+		PrincipalID:   "user-a",
+		Scopes:        []string{"skillhub:read"},
+		Now:           now,
+		PolicyVersion: "  v2  ",
+	})
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	if claims.PolicyVersion != "v2" {
+		t.Fatalf("claims.PolicyVersion = %q, want trimmed v2", claims.PolicyVersion)
 	}
 }

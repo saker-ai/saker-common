@@ -154,7 +154,7 @@ func TestHTTPHandlerInternalJWTWithAPIKey(t *testing.T) {
 	created, err := svc.CreateAPIKey(ctx, CreateAPIKeyRequest{
 		SessionID: session.ID,
 		Name:      "developer laptop",
-		Scopes:    []string{internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeWebHubNotificationsWrite},
+		Scopes:    []string{internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload, internaljwt.ScopeWebHubNotificationsWrite},
 		Now:       testNow(),
 	})
 	if err != nil {
@@ -162,7 +162,7 @@ func TestHTTPHandlerInternalJWTWithAPIKey(t *testing.T) {
 	}
 
 	handler := NewHTTPHandler(svc)
-	req := httptest.NewRequest(http.MethodPost, "/internal/internal-jwts", bytes.NewBufferString(`{"api_key":"`+created.Token+`","audience":"assethub","actions":["upload"]}`))
+	req := httptest.NewRequest(http.MethodPost, "/internal/internal-jwts", bytes.NewBufferString(`{"api_key":"`+created.Token+`","audience":"filehub","actions":["upload"]}`))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -172,7 +172,7 @@ func TestHTTPHandlerInternalJWTWithAPIKey(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Token == "" || result.Claims.Source != SessionSourceAPIKey || !has(result.Claims.Scopes, internaljwt.ScopeAssetHubUpload) {
+	if result.Token == "" || result.Claims.Source != SessionSourceAPIKey || !has(result.Claims.Scopes, internaljwt.ScopeFileHubUpload) {
 		t.Fatalf("claims = %+v", result.Claims)
 	}
 
@@ -231,7 +231,7 @@ func TestHTTPHandlerServiceAccountToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := NewHTTPHandler(svc)
-	req := httptest.NewRequest(http.MethodPost, "/iam/service-accounts", bytes.NewBufferString(`{"name":"ci","scopes":["assethub:read"]}`))
+	req := httptest.NewRequest(http.MethodPost, "/iam/service-accounts", bytes.NewBufferString(`{"name":"ci","scopes":["filehub:read"]}`))
 	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: session.ID})
 	addCSRF(req)
 	rec := httptest.NewRecorder()
@@ -274,7 +274,7 @@ func TestHTTPHandlerServiceAccountToken(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &validation); err != nil {
 		t.Fatal(err)
 	}
-	if validation.Principal.Type != PrincipalTypeServiceAccount || validation.KeyID != created.KeyID || !has(validation.Scopes, internaljwt.ScopeAssetHubRead) {
+	if validation.Principal.Type != PrincipalTypeServiceAccount || validation.KeyID != created.KeyID || !has(validation.Scopes, internaljwt.ScopeFileHubRead) {
 		t.Fatalf("validation = %+v", validation)
 	}
 	if bytes.Contains(rec.Body.Bytes(), []byte(HashAPIKey(created.Token))) {

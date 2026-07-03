@@ -2,7 +2,7 @@ package internaljwt
 
 const (
 	AudienceSkillHub  = "skillhub"
-	AudienceAssetHub  = "assethub"
+	AudienceFileHub   = "filehub"
 	AudienceChatHub   = "chathub"
 	AudienceFileStore = "filestore"
 	AudienceSaker     = "saker"
@@ -29,10 +29,10 @@ const (
 	ScopeSkillHubPublish = "skillhub:publish"
 	ScopeSkillHubAdmin   = "skillhub:admin"
 
-	ScopeAssetHubRead   = "assethub:read"
-	ScopeAssetHubUpload = "assethub:upload"
-	ScopeAssetHubWrite  = "assethub:write"
-	ScopeAssetHubAdmin  = "assethub:admin"
+	ScopeFileHubRead   = "filehub:read"
+	ScopeFileHubUpload = "filehub:upload"
+	ScopeFileHubWrite  = "filehub:write"
+	ScopeFileHubAdmin  = "filehub:admin"
 
 	ScopeChatHubRead  = "chathub:read"
 	ScopeChatHubWrite = "chathub:write"
@@ -77,8 +77,8 @@ func DefaultScopesForAudience(audience string) []string {
 	switch audience {
 	case AudienceSkillHub:
 		return []string{ScopeSkillHubRead, ScopeSkillHubWrite}
-	case AudienceAssetHub:
-		return []string{ScopeAssetHubRead, ScopeAssetHubUpload, ScopeAssetHubWrite}
+	case AudienceFileHub:
+		return []string{ScopeFileHubRead, ScopeFileHubUpload, ScopeFileHubWrite}
 	case AudienceChatHub:
 		return []string{ScopeChatHubRead, ScopeChatHubWrite}
 	case AudienceFileStore:

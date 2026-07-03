@@ -20,7 +20,7 @@ const (
 	RoleTeamViewer        = "team.viewer"
 	RoleSakerRunner       = "app.saker.runner"
 	RoleChatHubUser       = "app.chathub.user"
-	RoleAssetHubEditor    = "app.assethub.editor"
+	RoleFileHubEditor     = "app.filehub.editor"
 	RoleSkillHubPublisher = "app.skillhub.publisher"
 	RoleAIHubUser         = "app.aihub.user"
 	RoleAIHubViewer       = "app.aihub.viewer"
@@ -32,7 +32,7 @@ var knownRoleKeys = map[string]bool{
 	RolePlatformOwner: true, RolePlatformAdmin: true,
 	RoleTenantOwner: true, RoleTenantAdmin: true, RoleTenantOperator: true, RoleTenantViewer: true,
 	RoleTeamAdmin: true, RoleTeamEditor: true, RoleTeamViewer: true,
-	RoleSakerRunner: true, RoleChatHubUser: true, RoleAssetHubEditor: true, RoleSkillHubPublisher: true,
+	RoleSakerRunner: true, RoleChatHubUser: true, RoleFileHubEditor: true, RoleSkillHubPublisher: true,
 	RoleAIHubUser: true, RoleAIHubViewer: true, RoleAIHubAdmin: true,
 	RoleFrontendUser: true,
 }
@@ -59,7 +59,7 @@ func DefaultRoleScopes() map[string][]string {
 		RoleTenantOperator: {
 			internaljwt.ScopeSynapseRead, internaljwt.ScopeSynapseWrite,
 			internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite,
-			internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeAssetHubWrite,
+			internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload, internaljwt.ScopeFileHubWrite,
 			internaljwt.ScopeSkillHubRead, internaljwt.ScopeSkillHubWrite,
 			internaljwt.ScopeFileStoreRead, internaljwt.ScopeFileStoreWrite,
 			internaljwt.ScopeSakerRun, internaljwt.ScopeSakerToolExecute,
@@ -70,19 +70,19 @@ func DefaultRoleScopes() map[string][]string {
 		RoleTenantViewer: {
 			internaljwt.ScopeSynapseRead,
 			internaljwt.ScopeChatHubRead,
-			internaljwt.ScopeAssetHubRead,
+			internaljwt.ScopeFileHubRead,
 			internaljwt.ScopeSkillHubRead,
 			internaljwt.ScopeFileStoreRead,
 			internaljwt.ScopeAIHubRead,
 			internaljwt.ScopeStockHubRead, internaljwt.ScopeStockHubRetrieve,
 			internaljwt.ScopeWardenRead,
 		},
-		RoleTeamAdmin:         {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite, internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeAssetHubWrite},
-		RoleTeamEditor:        {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite, internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload},
-		RoleTeamViewer:        {internaljwt.ScopeChatHubRead, internaljwt.ScopeAssetHubRead},
+		RoleTeamAdmin:         {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite, internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload, internaljwt.ScopeFileHubWrite},
+		RoleTeamEditor:        {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite, internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload},
+		RoleTeamViewer:        {internaljwt.ScopeChatHubRead, internaljwt.ScopeFileHubRead},
 		RoleSakerRunner:       {internaljwt.ScopeSakerRun, internaljwt.ScopeSakerToolExecute},
 		RoleChatHubUser:       {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite},
-		RoleAssetHubEditor:    {internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeAssetHubWrite},
+		RoleFileHubEditor:     {internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload, internaljwt.ScopeFileHubWrite},
 		RoleSkillHubPublisher: {internaljwt.ScopeSkillHubRead, internaljwt.ScopeSkillHubPublish, internaljwt.ScopeSkillHubWrite},
 		RoleAIHubUser:         {internaljwt.ScopeAIHubRead, internaljwt.ScopeAIHubInvoke},
 		RoleAIHubViewer:       {internaljwt.ScopeAIHubRead},
@@ -175,7 +175,7 @@ func AppsForScopes(scopes []string) []AppContext {
 	set := sliceSet(scopes)
 	apps := []AppContext{
 		{ID: internaljwt.AudienceChatHub, Enabled: set[internaljwt.ScopeChatHubRead] || set[internaljwt.ScopeChatHubWrite] || set[internaljwt.ScopeChatHubAdmin]},
-		{ID: internaljwt.AudienceAssetHub, Enabled: set[internaljwt.ScopeAssetHubRead] || set[internaljwt.ScopeAssetHubUpload] || set[internaljwt.ScopeAssetHubWrite] || set[internaljwt.ScopeAssetHubAdmin]},
+		{ID: internaljwt.AudienceFileHub, Enabled: set[internaljwt.ScopeFileHubRead] || set[internaljwt.ScopeFileHubUpload] || set[internaljwt.ScopeFileHubWrite] || set[internaljwt.ScopeFileHubAdmin]},
 		{ID: internaljwt.AudienceSkillHub, Enabled: set[internaljwt.ScopeSkillHubRead] || set[internaljwt.ScopeSkillHubWrite] || set[internaljwt.ScopeSkillHubAdmin]},
 	}
 	return apps
@@ -203,16 +203,16 @@ func scopesForAction(audience, action string) []string {
 		case "admin":
 			return []string{internaljwt.ScopeChatHubAdmin}
 		}
-	case internaljwt.AudienceAssetHub:
+	case internaljwt.AudienceFileHub:
 		switch action {
 		case "read", "list":
-			return []string{internaljwt.ScopeAssetHubRead}
+			return []string{internaljwt.ScopeFileHubRead}
 		case "upload", "create":
-			return []string{internaljwt.ScopeAssetHubUpload}
+			return []string{internaljwt.ScopeFileHubUpload}
 		case "write", "update", "delete":
-			return []string{internaljwt.ScopeAssetHubWrite}
+			return []string{internaljwt.ScopeFileHubWrite}
 		case "admin":
-			return []string{internaljwt.ScopeAssetHubAdmin}
+			return []string{internaljwt.ScopeFileHubAdmin}
 		}
 	case internaljwt.AudienceSkillHub:
 		switch action {
@@ -299,7 +299,7 @@ func allScopes() []string {
 		internaljwt.ScopeSynapseRead, internaljwt.ScopeSynapseWrite, internaljwt.ScopeSynapseAdmin,
 		internaljwt.ScopeSakerRun, internaljwt.ScopeSakerToolExecute, internaljwt.ScopeSakerToolApprove,
 		internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite, internaljwt.ScopeChatHubAdmin,
-		internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeAssetHubWrite, internaljwt.ScopeAssetHubAdmin,
+		internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload, internaljwt.ScopeFileHubWrite, internaljwt.ScopeFileHubAdmin,
 		internaljwt.ScopeSkillHubRead, internaljwt.ScopeSkillHubWrite, internaljwt.ScopeSkillHubPublish, internaljwt.ScopeSkillHubAdmin,
 		internaljwt.ScopeFileStoreRead, internaljwt.ScopeFileStoreWrite, internaljwt.ScopeFileStoreAdmin,
 		internaljwt.ScopeWebHubNotificationsWrite,

@@ -58,7 +58,7 @@ func TestIdentityContextAndInternalJWT(t *testing.T) {
 
 	_, err = svc.SignInternalJWT(ctx, InternalJWTRequest{
 		SessionID: session.ID,
-		Audience:  internaljwt.AudienceAssetHub,
+		Audience:  internaljwt.AudienceFileHub,
 		Actions:   []string{"upload"},
 		Now:       testNow(),
 	})
@@ -90,7 +90,7 @@ func TestUpdatePolicyAffectsRuntimeAuthorization(t *testing.T) {
 	}
 	if _, err := svc.SignInternalJWT(ctx, InternalJWTRequest{
 		SessionID: session.ID,
-		Audience:  internaljwt.AudienceAssetHub,
+		Audience:  internaljwt.AudienceFileHub,
 		Actions:   []string{"read"},
 		Now:       testNow(),
 	}); !errors.Is(err, ErrForbidden) {
@@ -98,7 +98,7 @@ func TestUpdatePolicyAffectsRuntimeAuthorization(t *testing.T) {
 	}
 
 	updated, err := NewPolicy(map[string][]string{
-		RoleTenantViewer: {internaljwt.ScopeAssetHubRead},
+		RoleTenantViewer: {internaljwt.ScopeFileHubRead},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -106,14 +106,14 @@ func TestUpdatePolicyAffectsRuntimeAuthorization(t *testing.T) {
 	svc.UpdatePolicy(updated)
 	result, err := svc.SignInternalJWT(ctx, InternalJWTRequest{
 		SessionID: session.ID,
-		Audience:  internaljwt.AudienceAssetHub,
+		Audience:  internaljwt.AudienceFileHub,
 		Actions:   []string{"read"},
 		Now:       testNow(),
 	})
 	if err != nil {
 		t.Fatalf("SignInternalJWT after policy update: %v", err)
 	}
-	if !has(result.Claims.Scopes, internaljwt.ScopeAssetHubRead) {
+	if !has(result.Claims.Scopes, internaljwt.ScopeFileHubRead) {
 		t.Fatalf("scopes after update = %v", result.Claims.Scopes)
 	}
 }
@@ -123,7 +123,7 @@ func TestAPIKeyStoresOnlyHashAndValidates(t *testing.T) {
 	svc, store := newTestService(t)
 	seedPrincipal(t, ctx, store, Principal{
 		ID: "principal-a", TenantID: "tenant-a", Type: PrincipalTypeUser, Status: "active",
-		Roles: []RoleGrant{{Key: RoleAssetHubEditor}},
+		Roles: []RoleGrant{{Key: RoleFileHubEditor}},
 	})
 	session, err := svc.CreateSession(ctx, "principal-a", testNow())
 	if err != nil {
@@ -131,7 +131,7 @@ func TestAPIKeyStoresOnlyHashAndValidates(t *testing.T) {
 	}
 	created, err := svc.CreateAPIKey(ctx, CreateAPIKeyRequest{
 		SessionID: session.ID,
-		Scopes:    []string{internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload},
+		Scopes:    []string{internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload},
 		ExpiresAt: testNow().Add(time.Hour),
 		Now:       testNow(),
 	})
@@ -183,7 +183,7 @@ func TestCreateServiceAccountTokenSignsAsServiceAccount(t *testing.T) {
 	created, err := svc.CreateServiceAccountToken(ctx, CreateServiceAccountRequest{
 		SessionID: session.ID,
 		Name:      "synapse-filestorage",
-		Scopes:    []string{internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubUpload, internaljwt.ScopeWebHubNotificationsWrite},
+		Scopes:    []string{internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload, internaljwt.ScopeWebHubNotificationsWrite},
 		Now:       testNow(),
 	})
 	if err != nil {
@@ -198,7 +198,7 @@ func TestCreateServiceAccountTokenSignsAsServiceAccount(t *testing.T) {
 	}
 	result, err := svc.SignInternalJWT(ctx, InternalJWTRequest{
 		APIKey:   created.Token,
-		Audience: internaljwt.AudienceAssetHub,
+		Audience: internaljwt.AudienceFileHub,
 		Actions:  []string{"upload"},
 		Now:      testNow(),
 		JWTID:    "jwt-svc",
@@ -206,7 +206,7 @@ func TestCreateServiceAccountTokenSignsAsServiceAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignInternalJWT: %v", err)
 	}
-	if result.Claims.PrincipalType != PrincipalTypeServiceAccount || result.Claims.PrincipalID != created.ServiceAccountID || !has(result.Claims.Scopes, internaljwt.ScopeAssetHubUpload) {
+	if result.Claims.PrincipalType != PrincipalTypeServiceAccount || result.Claims.PrincipalID != created.ServiceAccountID || !has(result.Claims.Scopes, internaljwt.ScopeFileHubUpload) {
 		t.Fatalf("claims = %+v", result.Claims)
 	}
 	result, err = svc.SignInternalJWT(ctx, InternalJWTRequest{
@@ -224,7 +224,7 @@ func TestCreateServiceAccountTokenSignsAsServiceAccount(t *testing.T) {
 	}
 	_, err = svc.SignInternalJWT(ctx, InternalJWTRequest{
 		APIKey:   created.Token,
-		Audience: internaljwt.AudienceAssetHub,
+		Audience: internaljwt.AudienceFileHub,
 		Actions:  []string{"admin"},
 		Now:      testNow(),
 	})
@@ -315,7 +315,7 @@ func TestClientCredentialsTokenSignsAsServiceAccount(t *testing.T) {
 		"exp":       now.Add(time.Minute).Unix(),
 		"iat":       now.Add(-time.Minute).Unix(),
 		"tenant_id": "tenant-a",
-		"scope":     internaljwt.ScopeAssetHubRead + " " + internaljwt.ScopeAssetHubUpload,
+		"scope":     internaljwt.ScopeFileHubRead + " " + internaljwt.ScopeFileHubUpload,
 	})
 	store := NewMemoryStore()
 	svc, err := NewService(Config{
@@ -334,7 +334,7 @@ func TestClientCredentialsTokenSignsAsServiceAccount(t *testing.T) {
 	}
 	result, err := svc.SignInternalJWT(ctx, InternalJWTRequest{
 		ClientCredentialsToken: token,
-		Audience:               internaljwt.AudienceAssetHub,
+		Audience:               internaljwt.AudienceFileHub,
 		Actions:                []string{"upload"},
 		Now:                    now,
 		JWTID:                  "jwt-m2m",
@@ -342,12 +342,12 @@ func TestClientCredentialsTokenSignsAsServiceAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignInternalJWT client credentials: %v", err)
 	}
-	if result.Claims.PrincipalType != PrincipalTypeServiceAccount || result.Claims.TenantID != "tenant-a" || !has(result.Claims.Scopes, internaljwt.ScopeAssetHubUpload) {
+	if result.Claims.PrincipalType != PrincipalTypeServiceAccount || result.Claims.TenantID != "tenant-a" || !has(result.Claims.Scopes, internaljwt.ScopeFileHubUpload) {
 		t.Fatalf("claims = %+v", result.Claims)
 	}
 	_, err = svc.SignInternalJWT(ctx, InternalJWTRequest{
 		ClientCredentialsToken: token,
-		Audience:               internaljwt.AudienceAssetHub,
+		Audience:               internaljwt.AudienceFileHub,
 		Actions:                []string{"admin"},
 		Now:                    now,
 	})
@@ -400,7 +400,7 @@ func TestDelegateAgentIntersectsActorScopes(t *testing.T) {
 	svc, store := newTestService(t)
 	seedPrincipal(t, ctx, store, Principal{
 		ID: "principal-a", TenantID: "tenant-a", Type: PrincipalTypeUser, Status: "active",
-		Roles: []RoleGrant{{Key: RoleAssetHubEditor}},
+		Roles: []RoleGrant{{Key: RoleFileHubEditor}},
 	})
 	session, err := svc.CreateSession(ctx, "principal-a", testNow())
 	if err != nil {
@@ -410,9 +410,9 @@ func TestDelegateAgentIntersectsActorScopes(t *testing.T) {
 	result, err := svc.DelegateAgent(ctx, DelegateAgentRequest{
 		SessionID: session.ID,
 		RunID:     "run-a",
-		Audience:  internaljwt.AudienceAssetHub,
+		Audience:  internaljwt.AudienceFileHub,
 		Actions:   []string{"read", "upload"},
-		Scopes:    []string{internaljwt.ScopeAssetHubRead, internaljwt.ScopeAssetHubAdmin},
+		Scopes:    []string{internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubAdmin},
 		Resource:  &internaljwt.ResourceRef{Type: "run", ID: "run-a"},
 		Now:       testNow(),
 		JWTID:     "jwt-agent",
@@ -423,7 +423,7 @@ func TestDelegateAgentIntersectsActorScopes(t *testing.T) {
 	if result.Claims.PrincipalType != PrincipalTypeAgent || result.Claims.Actor == nil || result.Claims.Delegation == nil {
 		t.Fatalf("delegated claims = %+v", result.Claims)
 	}
-	if !has(result.Claims.Scopes, internaljwt.ScopeAssetHubRead) || has(result.Claims.Scopes, internaljwt.ScopeAssetHubAdmin) {
+	if !has(result.Claims.Scopes, internaljwt.ScopeFileHubRead) || has(result.Claims.Scopes, internaljwt.ScopeFileHubAdmin) {
 		t.Fatalf("delegated scopes = %v", result.Claims.Scopes)
 	}
 	audits := store.AuditEvents()
@@ -443,9 +443,9 @@ func TestDelegateAgentIntersectsActorScopes(t *testing.T) {
 
 	_, err = svc.DelegateAgent(ctx, DelegateAgentRequest{
 		SessionID: session.ID,
-		Audience:  internaljwt.AudienceAssetHub,
+		Audience:  internaljwt.AudienceFileHub,
 		Actions:   []string{"admin"},
-		Scopes:    []string{internaljwt.ScopeAssetHubAdmin},
+		Scopes:    []string{internaljwt.ScopeFileHubAdmin},
 		Now:       testNow(),
 	})
 	if !errors.Is(err, ErrForbidden) {
@@ -541,7 +541,7 @@ func seedPrincipal(t *testing.T, ctx context.Context, store *MemoryStore, princi
 }
 
 func testNow() time.Time {
-	return time.Date(2026, 6, 19, 12, 0, 0, 0, time.UTC)
+	return time.Now().UTC()
 }
 
 func has(values []string, want string) bool {
@@ -551,4 +551,58 @@ func has(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestServicePolicyVersion(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	svc, err := NewService(Config{
+		Issuer:        "warden",
+		MasterSecret:  testSecret,
+		InternalTTL:   5 * time.Minute,
+		PolicyVersion: "builtin-2026-06-20",
+	}, store)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	if got := svc.PolicyVersion(); got != "builtin-2026-06-20" {
+		t.Fatalf("PolicyVersion() = %q", got)
+	}
+	svc.UpdatePolicyVersion(" v2 ")
+	if got := svc.PolicyVersion(); got != "v2" {
+		t.Fatalf("PolicyVersion() after UpdatePolicyVersion = %q, want trimmed v2", got)
+	}
+	seedPrincipal(t, ctx, store, Principal{
+		ID: "principal-a", TenantID: "tenant-a", Username: "alice", DisplayName: "Alice",
+		Type: PrincipalTypeUser, Status: "active", Roles: []RoleGrant{{Key: RoleTenantAdmin}},
+	})
+	session, err := svc.CreateSession(ctx, "principal-a", testNow())
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	issued, err := svc.SignInternalJWT(ctx, InternalJWTRequest{
+		SessionID: session.ID, Audience: internaljwt.AudienceWebHub, Actions: []string{"notify"},
+		Now: testNow(),
+	})
+	if err != nil {
+		t.Fatalf("SignInternalJWT: %v", err)
+	}
+	if issued.Claims.PolicyVersion != "v2" {
+		t.Fatalf("issued.Claims.PolicyVersion = %q, want v2", issued.Claims.PolicyVersion)
+	}
+	svc.UpdatePolicyVersion("v3")
+	if got := svc.PolicyVersion(); got != "v3" {
+		t.Fatalf("PolicyVersion() after second update = %q", got)
+	}
+}
+
+func TestServicePolicyVersionEmptyByDefault(t *testing.T) {
+	store := NewMemoryStore()
+	svc, err := NewService(Config{Issuer: "warden", MasterSecret: testSecret, InternalTTL: 5 * time.Minute}, store)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	if got := svc.PolicyVersion(); got != "" {
+		t.Fatalf("PolicyVersion() default = %q, want empty", got)
+	}
 }
