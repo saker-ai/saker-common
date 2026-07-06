@@ -44,6 +44,18 @@ func (s *MemoryStore) UpsertPrincipal(_ context.Context, principal Principal) er
 	return nil
 }
 
+func (s *MemoryStore) UpdatePrincipalStatus(_ context.Context, principalID, status string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	principal, ok := s.principals[principalID]
+	if !ok {
+		return ErrNotFound
+	}
+	principal.Status = status
+	s.principals[principalID] = principal
+	return nil
+}
+
 func (s *MemoryStore) GetTenant(_ context.Context, tenantID string) (Tenant, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

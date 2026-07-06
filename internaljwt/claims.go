@@ -21,6 +21,11 @@ type Claims struct {
 	Type    string `json:"typ"`
 	Version int    `json:"ver"`
 
+	// PolicyVersion is the role-policy version active when the token was signed.
+	// Validators can reject tokens whose PolicyVersion differs from the current
+	// in-memory version so that role-policy reloads invalidate outstanding tokens.
+	PolicyVersion string `json:"policy_ver,omitempty"`
+
 	TenantID      string `json:"tenant_id"`
 	OrgID         string `json:"org_id,omitempty"`
 	PrincipalType string `json:"principal_type"`
@@ -99,4 +104,5 @@ type SignInput struct {
 	JWTID         string
 	Actor         *ActorRef
 	Delegation    *DelegationRef
+	PolicyVersion string
 }

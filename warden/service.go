@@ -17,27 +17,39 @@ import (
 )
 
 type Config struct {
-	Issuer             string
-	MasterSecret       string
-	InternalTTL        time.Duration
-	AgentTTL           time.Duration
-	SessionTTL         time.Duration
-	APIKeyPrefix       string
-	Policy             Policy
-	OIDCVerifier       *OIDCVerifier
-	OIDCTokenExchanger OIDCTokenExchanger
-	DirectorySource    DirectorySource
+	Issuer                    string
+	MasterSecret              string
+	InternalTTL               time.Duration
+	AgentTTL                  time.Duration
+	SessionTTL                time.Duration
+	APIKeyPrefix              string
+	Policy                    Policy
+	PolicyVersion             string
+	OIDCVerifier              *OIDCVerifier
+	OIDCTokenExchanger        OIDCTokenExchanger
+	DirectorySource           DirectorySource
+	RegistrationPolicy        string
+	EmailVerificationRequired bool
+	Mailer                    Mailer
+	SecurityNotifier          SecurityNotifier
+	Templates                 *TemplateRegistry
 }
 
 type Service struct {
-	cfg            Config
-	store          Store
-	signer         *internaljwt.Signer
-	policyMu       sync.RWMutex
-	policy         Policy
-	oidcVerifier   *OIDCVerifier
-	tokenExchanger OIDCTokenExchanger
-	directory      DirectorySource
+	cfg                Config
+	store              Store
+	signer             *internaljwt.Signer
+	policyMu           sync.RWMutex
+	policy             Policy
+	policyVersion      string
+	registrationMu     sync.RWMutex
+	registrationPolicy string
+	oidcVerifier       *OIDCVerifier
+	tokenExchanger     OIDCTokenExchanger
+	directory          DirectorySource
+	mailer             Mailer
+	securityNotifier   SecurityNotifier
+	templates          *TemplateRegistry
 }
 
 func NewService(cfg Config, store Store) (*Service, error) {
@@ -62,6 +74,9 @@ func NewService(cfg Config, store Store) (*Service, error) {
 	if cfg.APIKeyPrefix == "" {
 		cfg.APIKeyPrefix = "sak"
 	}
+	if strings.TrimSpace(cfg.RegistrationPolicy) == "" {
+		cfg.RegistrationPolicy = RegistrationPolicyOpen
+	}
 	signer, err := internaljwt.NewSigner(cfg.Issuer, cfg.MasterSecret, cfg.InternalTTL)
 	if err != nil {
 		return nil, err
@@ -70,13 +85,64 @@ func NewService(cfg Config, store Store) (*Service, error) {
 	if policy.roleScopes == nil {
 		policy = DefaultPolicy()
 	}
+	mailer := cfg.Mailer
+	if mailer == nil {
+		mailer = NoopMailer{}
+	}
+	securityNotifier := cfg.SecurityNotifier
+	if securityNotifier == nil {
+		securityNotifier = NoopSecurityNotifier{}
+	}
+	templates := cfg.Templates
+	if templates == nil {
+		templates = DefaultTemplateRegistry()
+	}
 	return &Service{
-		cfg: cfg, store: store, signer: signer, policy: policy,
-		oidcVerifier: cfg.OIDCVerifier, tokenExchanger: cfg.OIDCTokenExchanger, directory: cfg.DirectorySource,
+		cfg: cfg, store: store, signer: signer, policy: policy, policyVersion: strings.TrimSpace(cfg.PolicyVersion),
+		registrationPolicy: normalizeRegistrationPolicy(cfg.RegistrationPolicy),
+		oidcVerifier:       cfg.OIDCVerifier, tokenExchanger: cfg.OIDCTokenExchanger, directory: cfg.DirectorySource,
+		mailer: mailer, securityNotifier: securityNotifier, templates: templates,
 	}, nil
 }
 
 func (s *Service) Store() Store { return s.store }
+
+func (s *Service) Mailer() Mailer { return s.mailer }
+
+func (s *Service) Templates() *TemplateRegistry { return s.templates }
+
+func (s *Service) SecurityNotifier() SecurityNotifier { return s.securityNotifier }
+
+func (s *Service) SetSecurityNotifier(n SecurityNotifier) {
+	if n == nil {
+		n = NoopSecurityNotifier{}
+	}
+	s.securityNotifier = n
+}
+
+func (s *Service) Signer() *internaljwt.Signer { return s.signer }
+
+func (s *Service) PolicyVersion() string {
+	s.policyMu.RLock()
+	defer s.policyMu.RUnlock()
+	return s.policyVersion
+}
+
+func (s *Service) SignSystemInternalJWT(ctx context.Context, audience string, scopes []string, now time.Time) (string, error) {
+	if s.signer == nil {
+		return "", ErrInvalidInput
+	}
+	token, _, err := s.signer.Sign(internaljwt.SignInput{
+		Audience:      audience,
+		Scopes:        scopes,
+		PrincipalID:   "warden-system",
+		TenantID:      "",
+		Source:        "warden",
+		Now:           now,
+		PolicyVersion: s.PolicyVersion(),
+	})
+	return token, err
+}
 
 func (s *Service) UpdatePolicy(policy Policy) {
 	if policy.roleScopes == nil {
@@ -84,7 +150,39 @@ func (s *Service) UpdatePolicy(policy Policy) {
 	}
 	s.policyMu.Lock()
 	s.policy = policy
+	s.policyVersion = strings.TrimSpace(s.policyVersion)
 	s.policyMu.Unlock()
+}
+
+func (s *Service) UpdatePolicyVersion(version string) {
+	version = strings.TrimSpace(version)
+	s.policyMu.Lock()
+	s.policyVersion = version
+	s.policyMu.Unlock()
+}
+
+func (s *Service) RegistrationPolicy() string {
+	s.registrationMu.RLock()
+	defer s.registrationMu.RUnlock()
+	return s.registrationPolicy
+}
+
+func (s *Service) UpdateRegistrationPolicy(policy string) {
+	normalized := normalizeRegistrationPolicy(policy)
+	s.registrationMu.Lock()
+	s.registrationPolicy = normalized
+	s.registrationMu.Unlock()
+}
+
+func normalizeRegistrationPolicy(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case RegistrationPolicyApprovalRequired, "approval-required", "approvalrequired":
+		return RegistrationPolicyApprovalRequired
+	case RegistrationPolicyClosed:
+		return RegistrationPolicyClosed
+	default:
+		return RegistrationPolicyOpen
+	}
 }
 
 func (s *Service) Policy() Policy {
@@ -293,6 +391,9 @@ func (s *Service) CreateSession(ctx context.Context, principalID string, now tim
 	if principal.Status == "disabled" {
 		return Session{}, ErrDisabled
 	}
+	if principal.Status == "pending" {
+		return Session{}, ErrAuthorizationPending
+	}
 	session := Session{
 		ID:          "sess_" + randomString(),
 		PrincipalID: principal.ID,
@@ -323,6 +424,9 @@ func (s *Service) ValidateSession(ctx context.Context, sessionID string, now tim
 	}
 	if principal.Status == "disabled" {
 		return Session{}, Principal{}, ErrDisabled
+	}
+	if principal.Status == "pending" {
+		return Session{}, Principal{}, ErrAuthorizationPending
 	}
 	return session, principal, nil
 }
@@ -371,6 +475,7 @@ func (s *Service) IdentityContext(ctx context.Context, sessionID string, now tim
 		Permissions:      scopes,
 		ConsoleAccess:    ConsoleAccess(principal.Roles),
 		Apps:             AppsForScopes(scopes),
+		EmailVerified:    principal.EmailVerified,
 	}, nil
 }
 
@@ -850,7 +955,7 @@ func (s *Service) sign(ctx context.Context, principal Principal, session Session
 		Audience: audience, TTL: ttl, TenantID: session.TenantID, PrincipalType: principal.Type, PrincipalID: principal.ID,
 		Email: principal.Email, Name: principal.DisplayName, Handle: principal.Username, Roles: roleKeys(principal.Roles),
 		Scopes: scopes, Resource: resource, SessionID: session.ID, AuthTime: session.AuthTime, Source: source,
-		Now: now, JWTID: jwtID, Actor: actor, Delegation: delegation,
+		Now: now, JWTID: jwtID, Actor: actor, Delegation: delegation, PolicyVersion: s.PolicyVersion(),
 	})
 	if err != nil {
 		return InternalJWTResult{}, err

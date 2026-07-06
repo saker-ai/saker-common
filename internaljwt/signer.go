@@ -64,6 +64,7 @@ func (s *Signer) Sign(in SignInput) (string, Claims, error) {
 		JWTID:         jti,
 		Type:          TypeInternalAccess,
 		Version:       1,
+		PolicyVersion: strings.TrimSpace(in.PolicyVersion),
 		TenantID:      strings.TrimSpace(in.TenantID),
 		OrgID:         strings.TrimSpace(in.OrgID),
 		PrincipalType: strings.TrimSpace(in.PrincipalType),

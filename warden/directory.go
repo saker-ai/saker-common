@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
+
+	"github.com/saker-ai/saker-common/internaljwt"
 )
 
 func (s *Service) SyncDirectorySnapshot(ctx context.Context, snapshot CasdoorDirectorySnapshot) (Principal, error) {
@@ -29,17 +31,39 @@ func (s *Service) SyncDirectorySnapshot(ctx context.Context, snapshot CasdoorDir
 		Email:         snapshot.User.Email,
 		DisplayName:   snapshot.User.DisplayName,
 		Type:          PrincipalTypeUser,
-		Status:        "active",
+		Status:        PrincipalStatusActive,
+		EmailVerified: snapshot.User.EmailVerified,
 		Roles:         normalizedDirectoryRoles(snapshot.Roles),
 		Teams:         directoryTeams(tenant.ID, snapshot.Groups),
 	}
+	for _, role := range unknownDirectoryRoles(snapshot.Roles) {
+		s.audit(ctx, principal, "directory.unknown_role", &internaljwt.ResourceRef{Type: "role", ID: role}, "deny", "")
+		s.notifySecurity(ctx, SecurityEvent{
+			Type:        "directory.unknown_role",
+			TenantID:    principal.TenantID,
+			PrincipalID: principal.ID,
+			SourceApp:   "warden",
+			Title:       securityTitleFor("directory.unknown_role", principal.ID),
+			Body:        securityBodyFor("directory.unknown_role", principal.ID, role),
+		})
+	}
+	existing, existingErr := s.store.GetPrincipal(ctx, principal.ID)
+	existingExists := existingErr == nil && existing.ID != ""
+	if existingExists {
+		principal.Status = existing.Status
+	}
 	if snapshot.User.Disabled {
-		principal.Status = "disabled"
+		principal.Status = PrincipalStatusDisabled
+	} else if !existingExists {
+		switch s.RegistrationPolicy() {
+		case RegistrationPolicyApprovalRequired, RegistrationPolicyClosed:
+			principal.Status = PrincipalStatusPending
+		}
 	}
 	if err := s.store.UpsertPrincipal(ctx, principal); err != nil {
 		return Principal{}, err
 	}
-	if principal.Status == "disabled" {
+	if principal.Status == PrincipalStatusDisabled {
 		if err := s.store.DeleteSessionsByPrincipal(ctx, principal.ID); err != nil {
 			return Principal{}, err
 		}
@@ -74,6 +98,17 @@ func (s *Service) ReconcileDirectory(ctx context.Context) error {
 	return s.directory.Reconcile(ctx)
 }
 
+func (s *Service) ReconcileDirectoryIfAvailable(ctx context.Context) error {
+	if s.directory == nil {
+		return nil
+	}
+	return s.directory.Reconcile(ctx)
+}
+
+func (s *Service) HasDirectorySource() bool {
+	return s.directory != nil
+}
+
 func normalizedDirectoryRoles(roles []string) []RoleGrant {
 	out := make([]RoleGrant, 0, len(roles)+1)
 	seen := map[string]bool{}
@@ -89,6 +124,26 @@ func normalizedDirectoryRoles(roles []string) []RoleGrant {
 		out = append(out, RoleGrant{Key: RoleFrontendUser})
 	}
 	return out
+}
+
+func unknownDirectoryRoles(roles []string) []string {
+	var unknown []string
+	seen := map[string]bool{}
+	for _, role := range roles {
+		trimmed := strings.TrimSpace(role)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := NormalizeRoleKey(trimmed); ok {
+			continue
+		}
+		if seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		unknown = append(unknown, trimmed)
+	}
+	return unknown
 }
 
 func directoryTeams(tenantID string, groups []CasdoorGroup) []Team {

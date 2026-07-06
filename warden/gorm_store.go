@@ -45,6 +45,7 @@ type principalModel struct {
 	DisplayName   string    `gorm:"size:255"`
 	Type          string    `gorm:"size:32;not null;index"`
 	Status        string    `gorm:"size:32;not null;default:active"`
+	EmailVerified bool      `gorm:"not null;default:false"`
 	CreatedAt     time.Time `gorm:"not null"`
 	UpdatedAt     time.Time `gorm:"not null"`
 }
@@ -320,7 +321,7 @@ func (s *GORMStore) ListPrincipals(ctx context.Context, tenantID string, limit i
 		out = append(out, Principal{
 			ID: model.ID, TenantID: model.TenantID, CasdoorUserID: model.CasdoorUserID,
 			Username: model.Username, Email: model.Email, DisplayName: model.DisplayName,
-			Type: model.Type, Status: model.Status,
+			Type: model.Type, Status: model.Status, EmailVerified: model.EmailVerified,
 		})
 	}
 	return out, nil
@@ -462,6 +463,7 @@ func (s *GORMStore) UpsertPrincipal(ctx context.Context, principal Principal) er
 			DisplayName:   principal.DisplayName,
 			Type:          defaultString(principal.Type, PrincipalTypeUser),
 			Status:        defaultString(principal.Status, "active"),
+			EmailVerified: principal.EmailVerified,
 			CreatedAt:     now,
 			UpdatedAt:     now,
 		}
@@ -512,6 +514,17 @@ func (s *GORMStore) UpsertPrincipal(ctx context.Context, principal Principal) er
 		}
 		return nil
 	})
+}
+
+func (s *GORMStore) UpdatePrincipalStatus(ctx context.Context, principalID, status string) error {
+	result := s.db.WithContext(ctx).Model(&principalModel{}).Where("id = ?", principalID).Update("status", status)
+	if result.Error != nil {
+		return fmt.Errorf("update principal status: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *GORMStore) GetTenant(ctx context.Context, tenantID string) (Tenant, error) {
@@ -888,7 +901,7 @@ func principalFromModels(principal principalModel, roles []principalRoleModel, t
 	out := Principal{
 		ID: principal.ID, TenantID: principal.TenantID, CasdoorUserID: principal.CasdoorUserID,
 		Username: principal.Username, Email: principal.Email, DisplayName: principal.DisplayName,
-		Type: principal.Type, Status: principal.Status,
+		Type: principal.Type, Status: principal.Status, EmailVerified: principal.EmailVerified,
 	}
 	out.Roles = make([]RoleGrant, 0, len(roles))
 	for _, role := range roles {

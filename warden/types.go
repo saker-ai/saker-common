@@ -9,13 +9,15 @@ import (
 )
 
 var (
-	ErrNotFound             = errors.New("warden: not found")
-	ErrDisabled             = errors.New("warden: principal disabled")
-	ErrUnauthorized         = errors.New("warden: unauthorized")
-	ErrForbidden            = errors.New("warden: forbidden")
-	ErrInvalidInput         = errors.New("warden: invalid input")
-	ErrInsufficientRole     = errors.New("warden: insufficient role")
-	ErrAuthorizationPending = errors.New("warden: authorization pending")
+	ErrNotFound                  = errors.New("warden: not found")
+	ErrDisabled                  = errors.New("warden: principal disabled")
+	ErrUnauthorized              = errors.New("warden: unauthorized")
+	ErrForbidden                 = errors.New("warden: forbidden")
+	ErrInvalidInput              = errors.New("warden: invalid input")
+	ErrInsufficientRole          = errors.New("warden: insufficient role")
+	ErrAuthorizationPending      = errors.New("warden: authorization pending")
+	ErrRegistrationClosed        = errors.New("warden: registration closed")
+	ErrEmailVerificationRequired = errors.New("warden: email verification required")
 )
 
 const (
@@ -29,6 +31,14 @@ const (
 	SessionSourceAPIKey       = "api_key"
 	SessionSourceServiceToken = "service_token"
 	SessionSourceAgent        = "agent_delegation"
+
+	PrincipalStatusActive   = "active"
+	PrincipalStatusPending  = "pending"
+	PrincipalStatusDisabled = "disabled"
+
+	RegistrationPolicyOpen             = "open"
+	RegistrationPolicyApprovalRequired = "approval_required"
+	RegistrationPolicyClosed           = "closed"
 )
 
 type Tenant struct {
@@ -58,6 +68,7 @@ type Principal struct {
 	DisplayName   string
 	Type          string
 	Status        string
+	EmailVerified bool
 	Roles         []RoleGrant
 	Teams         []Team
 }
@@ -125,11 +136,12 @@ type AuditEvent struct {
 }
 
 type CasdoorUser struct {
-	ID          string
-	Username    string
-	Email       string
-	DisplayName string
-	Disabled    bool
+	ID            string
+	Username      string
+	Email         string
+	DisplayName   string
+	EmailVerified bool
+	Disabled      bool
 }
 
 type CasdoorGroup struct {
@@ -205,6 +217,7 @@ type IdentityContext struct {
 	Permissions      []string        `json:"permissions"`
 	ConsoleAccess    bool            `json:"console_access"`
 	Apps             []AppContext    `json:"apps"`
+	EmailVerified    bool            `json:"email_verified"`
 }
 
 type SwitchTenantRequest struct {
@@ -373,6 +386,7 @@ type ServiceAccountSummary struct {
 type Store interface {
 	UpsertTenant(ctx context.Context, tenant Tenant) error
 	UpsertPrincipal(ctx context.Context, principal Principal) error
+	UpdatePrincipalStatus(ctx context.Context, principalID, status string) error
 	GetTenant(ctx context.Context, tenantID string) (Tenant, error)
 	GetPrincipal(ctx context.Context, principalID string) (Principal, error)
 	ListPrincipalsByCasdoorUser(ctx context.Context, casdoorUserID string) ([]Principal, error)
