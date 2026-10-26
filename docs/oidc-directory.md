@@ -83,6 +83,14 @@ These are identity-policy primitives. The application must still check each RPC,
 WS frame and resource; a read-only WebSocket handshake does not grant writes.
 Custom policy configurations must explicitly add the desired role scopes.
 
+`POST /internal/session/validate` returns the current tenant, normalized role
+keys, effective `permissions`, policy version and session expiry alongside the
+existing session and principal fields. Permissions come from the live Warden
+policy on every validation. An empty policy produces `"permissions": []`;
+clients must preserve that explicit denial instead of restoring default role
+grants. Older servers may omit the field, which is a distinct compatibility
+case. The endpoint continues to require the internal caller credential.
+
 ## Verification
 
 `go test -race -tags integration ./...` covers a local signed OIDC discovery,

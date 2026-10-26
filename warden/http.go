@@ -472,10 +472,31 @@ func (h *HTTPHandler) handleValidateSession(w http.ResponseWriter, r *http.Reque
 		writeServiceError(w, err)
 		return
 	}
+	tenant, err := h.service.Store().GetTenant(r.Context(), session.TenantID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	permissions := h.service.scopesForRoles(principal.Roles)
+	if permissions == nil {
+		permissions = []string{}
+	}
+	roles := make([]string, 0, len(principal.Roles))
+	for _, role := range principal.Roles {
+		if key, ok := NormalizeRoleKey(role.Key); ok {
+			roles = append(roles, key)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"session_id": session.ID,
-		"tenant_id":  session.TenantID,
-		"principal":  principal,
+		"valid":          true,
+		"session_id":     session.ID,
+		"tenant_id":      session.TenantID,
+		"principal":      principal,
+		"tenant":         tenant,
+		"roles":          roles,
+		"permissions":    permissions,
+		"policy_version": h.service.PolicyVersion(),
+		"expires_at":     session.ExpiresAt.UTC().Format(time.RFC3339Nano),
 	})
 }
 
