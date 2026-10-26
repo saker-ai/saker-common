@@ -98,12 +98,13 @@ type serviceAccountModel struct {
 func (serviceAccountModel) TableName() string { return "service_accounts" }
 
 type oidcLoginStateModel struct {
-	State        string     `gorm:"primaryKey;size:255"`
-	Nonce        string     `gorm:"size:255;not null"`
-	CodeVerifier string     `gorm:"size:255;not null"`
-	RedirectURL  string     `gorm:"size:2048"`
-	ExpiresAt    *time.Time `gorm:"index"`
-	CreatedAt    time.Time  `gorm:"not null"`
+	State          string     `gorm:"primaryKey;size:255"`
+	BrowserBinding string     `gorm:"size:64"`
+	Nonce          string     `gorm:"size:255;not null"`
+	CodeVerifier   string     `gorm:"size:255;not null"`
+	RedirectURL    string     `gorm:"size:2048"`
+	ExpiresAt      *time.Time `gorm:"index"`
+	CreatedAt      time.Time  `gorm:"not null"`
 }
 
 func (oidcLoginStateModel) TableName() string { return "oidc_login_states" }
@@ -238,6 +239,7 @@ func OpenGORMStore(ctx context.Context, dsn string) (*GORMStore, error) {
 	}
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 	if err := sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
 		return nil, fmt.Errorf("database ping: %w", err)
 	}
 	store := &GORMStore{db: db}
@@ -325,6 +327,22 @@ func (s *GORMStore) ListPrincipals(ctx context.Context, tenantID string, limit i
 		})
 	}
 	return out, nil
+}
+
+// ListDirectorySubjects enumerates a tenant's complete external-user projection.
+// It intentionally has no admin-UI page limit and includes disabled users.
+func (s *GORMStore) ListDirectorySubjects(ctx context.Context, tenantID string) ([]string, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return nil, ErrInvalidInput
+	}
+	var subjects []string
+	err := s.db.WithContext(ctx).Model(&principalModel{}).
+		Where("tenant_id = ? AND casdoor_user_id <> ? AND type = ?", tenantID, "", PrincipalTypeUser).
+		Distinct().Order("casdoor_user_id ASC").Pluck("casdoor_user_id", &subjects).Error
+	if err != nil {
+		return nil, fmt.Errorf("list directory subjects: %w", err)
+	}
+	return subjects, nil
 }
 
 func (s *GORMStore) ListSessions(ctx context.Context, tenantID string, limit int) ([]Session, error) {
@@ -591,7 +609,8 @@ func (s *GORMStore) ListPrincipalsByCasdoorUser(ctx context.Context, casdoorUser
 func (s *GORMStore) PutOIDCLoginState(ctx context.Context, state OIDCLoginState) error {
 	model := oidcLoginStateModel{
 		State: state.State, Nonce: state.Nonce, CodeVerifier: state.CodeVerifier,
-		RedirectURL: state.RedirectURL, ExpiresAt: timePtrOrNil(state.ExpiresAt), CreatedAt: time.Now().UTC(),
+		BrowserBinding: state.BrowserBinding,
+		RedirectURL:    state.RedirectURL, ExpiresAt: timePtrOrNil(state.ExpiresAt), CreatedAt: time.Now().UTC(),
 	}
 	if err := s.db.WithContext(ctx).Save(&model).Error; err != nil {
 		return fmt.Errorf("put oidc login state: %w", err)
@@ -600,13 +619,33 @@ func (s *GORMStore) PutOIDCLoginState(ctx context.Context, state OIDCLoginState)
 }
 
 func (s *GORMStore) TakeOIDCLoginState(ctx context.Context, stateValue string) (OIDCLoginState, error) {
+	return s.takeOIDCLoginState(ctx, stateValue, nil)
+}
+
+func (s *GORMStore) TakeBoundOIDCLoginState(ctx context.Context, stateValue, bindingHash string) (OIDCLoginState, error) {
+	return s.takeOIDCLoginState(ctx, stateValue, &bindingHash)
+}
+
+func (s *GORMStore) takeOIDCLoginState(ctx context.Context, stateValue string, bindingHash *string) (OIDCLoginState, error) {
 	var state oidcLoginStateModel
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("state = ?", stateValue).First(&state).Error; err != nil {
+		query := tx.Where("state = ?", stateValue)
+		if bindingHash != nil {
+			query = query.Where("COALESCE(browser_binding, '') = ?", *bindingHash)
+		}
+		if err := query.First(&state).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("state = ?", stateValue).Delete(&oidcLoginStateModel{}).Error; err != nil {
-			return err
+		remove := tx.Where("state = ?", stateValue)
+		if bindingHash != nil {
+			remove = remove.Where("COALESCE(browser_binding, '') = ?", *bindingHash)
+		}
+		result := remove.Delete(&oidcLoginStateModel{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
 		}
 		return nil
 	})
@@ -618,7 +657,8 @@ func (s *GORMStore) TakeOIDCLoginState(ctx context.Context, stateValue string) (
 	}
 	return OIDCLoginState{
 		State: state.State, Nonce: state.Nonce, CodeVerifier: state.CodeVerifier,
-		RedirectURL: state.RedirectURL, ExpiresAt: timeValue(state.ExpiresAt),
+		BrowserBinding: state.BrowserBinding,
+		RedirectURL:    state.RedirectURL, ExpiresAt: timeValue(state.ExpiresAt),
 	}, nil
 }
 

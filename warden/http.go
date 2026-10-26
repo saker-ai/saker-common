@@ -1,11 +1,14 @@
 package warden
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -85,7 +88,12 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPHandler) handleOIDCStart(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	redirectURL := strings.TrimSpace(r.URL.Query().Get("redirect_url"))
+	if value := r.URL.Query().Get("return_to"); value != "" {
+		redirectURL = value
+	}
 	if r.Method == http.MethodPost {
 		var body struct {
 			RedirectURL string `json:"redirect_url"`
@@ -96,9 +104,20 @@ func (h *HTTPHandler) handleOIDCStart(w http.ResponseWriter, r *http.Request) {
 		}
 		redirectURL = body.RedirectURL
 	}
-	started, err := h.service.StartOIDCLogin(r.Context(), StartOIDCLoginRequest{RedirectURL: redirectURL})
+	binding := randomString() + randomString()
+	started, err := h.service.StartOIDCLogin(r.Context(), StartOIDCLoginRequest{RedirectURL: redirectURL, BrowserBinding: binding})
 	if err != nil {
 		writeServiceError(w, err)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: h.oidcCookieName(started.State, r), Value: binding, Path: "/", MaxAge: started.ExpiresIn,
+		HttpOnly: true, Secure: h.oidcSecureCookie(r), SameSite: http.SameSiteLaxMode,
+	})
+	// The Portal navigates here with return_to. Existing API callers use JSON
+	// and redirect_url, then explicitly navigate to authorization_url.
+	if r.Method == http.MethodGet && r.URL.Query().Has("return_to") {
+		http.Redirect(w, r, started.AuthorizationURL, http.StatusSeeOther)
 		return
 	}
 	writeJSON(w, http.StatusOK, started)
@@ -164,6 +183,14 @@ func (h *HTTPHandler) handleListAPIKeys(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *HTTPHandler) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	for _, key := range []string{"state", "code", "iss"} {
+		if len(r.URL.Query()[key]) > 1 {
+			writeServiceError(w, ErrUnauthorized)
+			return
+		}
+	}
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
 	state := strings.TrimSpace(r.URL.Query().Get("state"))
 	if r.Method == http.MethodPost && (code == "" || state == "") {
@@ -182,24 +209,64 @@ func (h *HTTPHandler) handleOIDCCallback(w http.ResponseWriter, r *http.Request)
 			state = body.State
 		}
 	}
-	session, identity, redirectURL, err := h.service.CompleteOIDCCallback(r.Context(), code, state, time.Time{})
+	cookies := r.CookiesNamed(h.oidcCookieName(state, r))
+	if state == "" || len(cookies) != 1 || cookies[0].Value == "" {
+		writeServiceError(w, ErrUnauthorized)
+		return
+	}
+	v, _, err := h.service.resolveOIDC(r.Context())
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	if v == nil ||
+		(v.RequireResponseIssuer || r.URL.Query().Has("iss")) && r.URL.Query().Get("iss") != v.Issuer {
+		writeServiceError(w, ErrUnauthorized)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: h.oidcCookieName(state, r), Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: h.oidcSecureCookie(r), SameSite: http.SameSiteLaxMode,
+	})
+	session, identity, redirectURL, err := h.service.CompleteBoundOIDCCallback(r.Context(), code, state, cookies[0].Value, time.Time{})
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: SessionCookieName, Value: session.ID, Path: "/",
-		Expires: session.ExpiresAt, HttpOnly: true, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode,
+		Expires: session.ExpiresAt, HttpOnly: true, Secure: h.oidcSecureCookie(r), SameSite: http.SameSiteLaxMode,
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name: CSRFCookieName, Value: randomString(), Path: "/",
-		Expires: session.ExpiresAt, HttpOnly: false, Secure: secureCookie(r), SameSite: http.SameSiteLaxMode,
+		Expires: session.ExpiresAt, HttpOnly: false, Secure: h.oidcSecureCookie(r), SameSite: http.SameSiteLaxMode,
 	})
 	if strings.TrimSpace(redirectURL) != "" {
 		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 		return
 	}
 	writeJSON(w, http.StatusOK, identity)
+}
+
+func (h *HTTPHandler) oidcSecureCookie(r *http.Request) bool {
+	if h.service.cfg.OIDCRedirectURL != "" {
+		u, err := url.Parse(h.service.cfg.OIDCRedirectURL)
+		return err == nil && u.Scheme == "https"
+	}
+	if v := h.service.oidcVerifier; v != nil && v.RedirectURL != "" {
+		u, err := url.Parse(v.RedirectURL)
+		return err == nil && u.Scheme == "https"
+	}
+	return secureCookie(r)
+}
+
+func (h *HTTPHandler) oidcCookieName(state string, r *http.Request) string {
+	hash := sha256.Sum256([]byte(state))
+	prefix := "warden_oidc_"
+	if h.oidcSecureCookie(r) {
+		prefix = "__Host-" + prefix
+	}
+	return prefix + hex.EncodeToString(hash[:])
 }
 
 func (h *HTTPHandler) handleSwitchTenant(w http.ResponseWriter, r *http.Request) {
@@ -547,7 +614,9 @@ func decodeJSON(r *http.Request, dst any) error {
 
 func writeServiceError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, ErrUnauthorized), errors.Is(err, ErrDisabled):
+	case errors.Is(err, ErrOIDCUnavailable), errors.Is(err, ErrDirectoryUnavailable):
+		writeJSONError(w, http.StatusServiceUnavailable, "identity_unavailable", "identity service unavailable")
+	case errors.Is(err, ErrUnauthorized), errors.Is(err, ErrDisabled), errors.Is(err, ErrOIDCInvalidToken), errors.Is(err, ErrOIDCNoKey):
 		writeJSONError(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
 	case errors.Is(err, ErrForbidden), errors.Is(err, ErrInsufficientRole):
 		writeJSONError(w, http.StatusForbidden, "forbidden", "forbidden")

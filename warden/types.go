@@ -159,16 +159,20 @@ type CasdoorDirectorySnapshot struct {
 }
 
 type OIDCLoginState struct {
-	State        string
-	Nonce        string
-	CodeVerifier string
-	RedirectURL  string
-	ExpiresAt    time.Time
+	State          string
+	BrowserBinding string
+	Nonce          string
+	CodeVerifier   string
+	RedirectURL    string
+	ExpiresAt      time.Time
 }
 
 type StartOIDCLoginRequest struct {
-	RedirectURL string    `json:"redirect_url,omitempty"`
-	Now         time.Time `json:"now,omitempty"`
+	// BrowserBinding is an opaque server-generated browser secret, never a
+	// client-supplied JSON field. Only its digest is persisted in login state.
+	BrowserBinding string    `json:"-"`
+	RedirectURL    string    `json:"redirect_url,omitempty"`
+	Now            time.Time `json:"now,omitempty"`
 }
 
 type StartedOIDCLogin struct {

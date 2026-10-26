@@ -106,6 +106,43 @@ func (s *MemoryStore) TakeOIDCLoginState(_ context.Context, stateValue string) (
 	return state, nil
 }
 
+// TakeBoundOIDCLoginState compares the server-side binding before consumption.
+// A callback from another browser cannot burn a legitimate login attempt.
+func (s *MemoryStore) TakeBoundOIDCLoginState(ctx context.Context, stateValue, bindingHash string) (OIDCLoginState, error) {
+	if err := ctx.Err(); err != nil {
+		return OIDCLoginState{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, ok := s.oidcStates[stateValue]
+	if !ok || state.BrowserBinding != bindingHash {
+		return OIDCLoginState{}, ErrNotFound
+	}
+	delete(s.oidcStates, stateValue)
+	return state, nil
+}
+
+func (s *MemoryStore) ListDirectorySubjects(ctx context.Context, tenantID string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if tenantID == "" {
+		return nil, ErrInvalidInput
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	seen := map[string]bool{}
+	for _, principal := range s.principals {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if principal.TenantID == tenantID && principal.CasdoorUserID != "" && principal.Type == PrincipalTypeUser {
+			seen[principal.CasdoorUserID] = true
+		}
+	}
+	return sortedKeys(seen), nil
+}
+
 func (s *MemoryStore) PutDeviceCode(_ context.Context, code DeviceCode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

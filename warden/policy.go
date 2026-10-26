@@ -19,6 +19,9 @@ const (
 	RoleTeamEditor        = "team.editor"
 	RoleTeamViewer        = "team.viewer"
 	RoleSakerRunner       = "app.saker.runner"
+	RoleSakerWebViewer    = "app.sakerweb.viewer"
+	RoleSakerWebUser      = "app.sakerweb.user"
+	RoleSakerWebOperator  = "app.sakerweb.operator"
 	RoleChatHubUser       = "app.chathub.user"
 	RoleFileHubEditor     = "app.filehub.editor"
 	RoleSkillHubPublisher = "app.skillhub.publisher"
@@ -34,7 +37,8 @@ var knownRoleKeys = map[string]bool{
 	RoleTeamAdmin: true, RoleTeamEditor: true, RoleTeamViewer: true,
 	RoleSakerRunner: true, RoleChatHubUser: true, RoleFileHubEditor: true, RoleSkillHubPublisher: true,
 	RoleAIHubUser: true, RoleAIHubViewer: true, RoleAIHubAdmin: true,
-	RoleFrontendUser: true,
+	RoleFrontendUser:   true,
+	RoleSakerWebViewer: true, RoleSakerWebUser: true, RoleSakerWebOperator: true,
 }
 
 var shorthandRoles = map[string]string{
@@ -57,6 +61,7 @@ func DefaultRoleScopes() map[string][]string {
 		RoleTenantOwner:   allScopes(),
 		RoleTenantAdmin:   allScopes(),
 		RoleTenantOperator: {
+			internaljwt.ScopeSakerWebRead, internaljwt.ScopeSakerWebWrite, internaljwt.ScopeSakerWebRun,
 			internaljwt.ScopeSynapseRead, internaljwt.ScopeSynapseWrite,
 			internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite,
 			internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload, internaljwt.ScopeFileHubWrite,
@@ -68,6 +73,7 @@ func DefaultRoleScopes() map[string][]string {
 			internaljwt.ScopeWardenRead, internaljwt.ScopeWardenWrite,
 		},
 		RoleTenantViewer: {
+			internaljwt.ScopeSakerWebRead,
 			internaljwt.ScopeSynapseRead,
 			internaljwt.ScopeChatHubRead,
 			internaljwt.ScopeFileHubRead,
@@ -81,6 +87,9 @@ func DefaultRoleScopes() map[string][]string {
 		RoleTeamEditor:        {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite, internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload},
 		RoleTeamViewer:        {internaljwt.ScopeChatHubRead, internaljwt.ScopeFileHubRead},
 		RoleSakerRunner:       {internaljwt.ScopeSakerRun, internaljwt.ScopeSakerToolExecute},
+		RoleSakerWebViewer:    {internaljwt.ScopeSakerWebRead},
+		RoleSakerWebUser:      {internaljwt.ScopeSakerWebRead, internaljwt.ScopeSakerWebWrite, internaljwt.ScopeSakerWebRun},
+		RoleSakerWebOperator:  {internaljwt.ScopeSakerWebRead, internaljwt.ScopeSakerWebWrite, internaljwt.ScopeSakerWebRun, internaljwt.ScopeSakerWebTerminal},
 		RoleChatHubUser:       {internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite},
 		RoleFileHubEditor:     {internaljwt.ScopeFileHubRead, internaljwt.ScopeFileHubUpload, internaljwt.ScopeFileHubWrite},
 		RoleSkillHubPublisher: {internaljwt.ScopeSkillHubRead, internaljwt.ScopeSkillHubPublish, internaljwt.ScopeSkillHubWrite},
@@ -234,6 +243,17 @@ func scopesForAction(audience, action string) []string {
 		case "tool:approve", "approve":
 			return []string{internaljwt.ScopeSakerToolApprove}
 		}
+	case internaljwt.AudienceSakerWeb:
+		switch action {
+		case "read", "list", "get", "view":
+			return []string{internaljwt.ScopeSakerWebRead}
+		case "write", "create", "update", "delete":
+			return []string{internaljwt.ScopeSakerWebWrite}
+		case "run":
+			return []string{internaljwt.ScopeSakerWebRun}
+		case "terminal":
+			return []string{internaljwt.ScopeSakerWebTerminal}
+		}
 	case internaljwt.AudienceFileStore:
 		switch action {
 		case "read", "list":
@@ -296,6 +316,7 @@ func scopesForAction(audience, action string) []string {
 
 func allScopes() []string {
 	return []string{
+		internaljwt.ScopeSakerWebRead, internaljwt.ScopeSakerWebWrite, internaljwt.ScopeSakerWebRun, internaljwt.ScopeSakerWebTerminal,
 		internaljwt.ScopeSynapseRead, internaljwt.ScopeSynapseWrite, internaljwt.ScopeSynapseAdmin,
 		internaljwt.ScopeSakerRun, internaljwt.ScopeSakerToolExecute, internaljwt.ScopeSakerToolApprove,
 		internaljwt.ScopeChatHubRead, internaljwt.ScopeChatHubWrite, internaljwt.ScopeChatHubAdmin,

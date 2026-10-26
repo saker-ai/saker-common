@@ -28,6 +28,9 @@ Import path:
 import corewarden "github.com/saker-ai/saker-common/warden"
 ```
 
+Browser OIDC, PKCE exchange, dynamic Casdoor directory projection and SakerWeb
+policy setup are described in [OIDC and directory integration](docs/oidc-directory.md).
+
 ## Versioning
 
 This module is consumed by service repositories through tagged Go module
