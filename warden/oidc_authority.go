@@ -30,6 +30,9 @@ func (s *Service) resolveOIDC(ctx context.Context) (*OIDCVerifier, OIDCTokenExch
 		return nil, nil, ErrOIDCUnavailable
 	}
 	client, err := s.cfg.OIDCFactory(ctx)
+	if err != nil && ctx.Err() != nil {
+		return nil, nil, ctx.Err()
+	}
 	if err != nil || client == nil || client.Verifier == nil || client.Verifier.RedirectURL != s.cfg.OIDCRedirectURL {
 		s.oidcRetryAfter = time.Now().Add(2 * time.Second)
 		return nil, nil, ErrOIDCUnavailable

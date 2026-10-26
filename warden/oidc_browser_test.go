@@ -102,3 +102,17 @@ type neverExchange struct{}
 func (neverExchange) ExchangeCode(context.Context, string, string) (OIDCTokenSet, error) {
 	panic("invalid browser binding reached token endpoint")
 }
+
+func TestBoundCallbackRejectsExpiredStateBeforeTokenExchange(t *testing.T) {
+	t.Parallel()
+	svc, err := NewService(Config{MasterSecret: testSecret, OIDCVerifier: &OIDCVerifier{}, OIDCTokenExchanger: neverExchange{}, DirectorySource: staticDirectorySource{}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.PutOIDCLoginState(t.Context(), OIDCLoginState{State: "expired", Nonce: "nonce", CodeVerifier: "verifier", BrowserBinding: oidcBindingHash("browser"), ExpiresAt: time.Now().Add(-time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := svc.CompleteBoundOIDCCallback(t.Context(), "code", "expired", "browser", time.Now()); err != ErrUnauthorized {
+		t.Fatalf("expired state=%v", err)
+	}
+}

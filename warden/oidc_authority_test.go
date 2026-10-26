@@ -91,3 +91,42 @@ func TestOIDCDiscoveryFailureIsSanitizedAndBackedOff(t *testing.T) {
 		t.Fatalf("discovery outage was not backed off: %d", calls.Load())
 	}
 }
+
+func TestCanceledDiscoveryDoesNotPoisonNextLogin(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	entered := make(chan struct{})
+	callback := "https://portal.example/callback"
+	svc, err := NewService(Config{MasterSecret: testSecret, OIDCRedirectURL: callback, OIDCFactory: func(ctx context.Context) (*OIDCClient, error) {
+		if calls.Add(1) == 1 {
+			close(entered)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		return &OIDCClient{Verifier: &OIDCVerifier{Issuer: "https://id.example", ClientID: "app", RedirectURL: callback}}, nil
+	}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := svc.StartOIDCLogin(ctx, StartOIDCLoginRequest{}); done <- err }()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("discovery did not start")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled discovery=%v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("discovery did not cancel")
+	}
+	if _, err := svc.StartOIDCLogin(t.Context(), StartOIDCLoginRequest{}); err != nil {
+		t.Fatalf("canceled browser poisoned next login: %v", err)
+	}
+}

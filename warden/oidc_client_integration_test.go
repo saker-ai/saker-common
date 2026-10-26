@@ -102,6 +102,13 @@ func TestDiscoveredOIDCBrowserLoginExchangesPKCEAndVerifiesToken(t *testing.T) {
 	if out := callback(false, ""); out.Code != 401 {
 		t.Fatalf("unbound callback=%d", out.Code)
 	}
+	wrongBrowser := httptest.NewRequest(http.MethodGet, callbackPath, nil)
+	wrongBrowser.AddCookie(&http.Cookie{Name: cookie.Name, Value: "wrong-browser"})
+	wrongBrowserResponse := httptest.NewRecorder()
+	handler.ServeHTTP(wrongBrowserResponse, wrongBrowser)
+	if wrongBrowserResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong browser=%d", wrongBrowserResponse.Code)
+	}
 	if out := callback(true, "&iss=https%3A%2F%2Fevil.example"); out.Code != 401 {
 		t.Fatalf("duplicate issuer=%d", out.Code)
 	}
