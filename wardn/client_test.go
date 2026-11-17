@@ -181,3 +181,30 @@ func TestDiscoveryFailsClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeCallbacksAndRegionalTransportStayBound(t *testing.T) {
+	cfg := Config{Issuer: "https://wardn.bxf.me/identity", ClientID: "native", ClientSecret: "secret", RedirectURL: "sakerwork://auth/callback", NativeRedirectScheme: "sakerwork", Region: "cn"}
+	metadata := Metadata{Issuer: cfg.Issuer, AuthorizationURL: cfg.Issuer + "/authorize?organization=saker", TokenURL: cfg.Issuer + "/token", JWKSURL: cfg.Issuer + "/jwks", Algorithms: []string{"RS256"}}
+	client, err := NewWithMetadata(t.Context(), cfg, metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := client.AuthorizationURL(AuthorizationRequest{State: "persisted-state", Nonce: "persisted-nonce", Verifier: strings.Repeat("a", 43)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(target)
+	if u.Path != "/cn/identity/authorize" || u.Query().Get("redirect_uri") != cfg.RedirectURL || u.Query().Get("organization") != "saker" {
+		t.Fatal("native redirect or regional endpoint lost")
+	}
+	if _, err = client.AuthorizationURL(AuthorizationRequest{State: "state", Nonce: "nonce", Verifier: strings.Repeat("a", 43), RedirectURL: "sakerwork://evil/callback"}); err == nil {
+		t.Fatal("native callback was not pinned")
+	}
+	cfg.NativeRedirectScheme = ""
+	if _, err = NewWithMetadata(t.Context(), cfg, metadata); err == nil {
+		t.Fatal("custom callback accepted without explicit scheme")
+	}
+	if RegionalURL(cfg.Issuer, "cn") != cfg.Issuer || RegionalURL("https://wardn.bxf.me.evil/identity/token", "cn") != "https://wardn.bxf.me.evil/identity/token" {
+		t.Fatal("canonical issuer or foreign host rewritten")
+	}
+}

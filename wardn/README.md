@@ -40,3 +40,9 @@ GOWORK=off go build ./...
 ```
 
 本 module 是子 module，根目录 `go test ./...` 不覆盖它。版本标签采用 `wardn/v0.1.0`；消费者固定已发布版本或不可变伪版本，禁止依赖相邻源码或交付本地 replace。登录协议和账号名称策略的变更必须通过签名令牌、拒绝路径和回调重放测试。
+
+## 现有应用的完整协议适配（v0.2）
+
+应用已有原子事务、cookie 和 PKCE 存储时，使用同一 `Client` 的 `AuthorizationURL(AuthorizationRequest)`、`ExchangeCode`、`VerifyToken`；必须先匹配浏览器、验证一次性 state 并原子消费事务，随后才换码。SDK 的 `Begin/Complete` 也使用这些相同协议函数，没有两套令牌验证实现。应用不能省略 nonce 验证或退回自行解析未验证令牌。
+
+`Config.Region` 只选择 Wardn 的传输端点，不改变规范 issuer。已有可信显式配置可使用 `NewWithMetadata`，仍检查所有端点同源和算法。原生客户端提交 S256 challenge，通过 `AuthorizationRequest.CodeChallenge` 保留设备端 PKCE；应用注册的私有回调协议通过 `NativeRedirectScheme` 显式允许且保持回调固定。桌面 loopback 回调需显式允许 loopback HTTP；公开服务端和远程 issuer 仍要求 HTTPS。
