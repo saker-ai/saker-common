@@ -1,0 +1,147 @@
+{
+  "schema": "wardn-lifecycle-acceptance/v1",
+  "status": "PASS",
+  "at": "2026-11-17T10:49:39.628026+00:00",
+  "sdk": "v0.3.1",
+  "source_scope": "immutable deployed build commits; documentation-only later main commits are separate",
+  "probe": {
+    "schema": "wardn-probe/v1",
+    "status": "PASS",
+    "checks": [
+      "mobile_desktop_pkce_refresh_replay_rejection",
+      "single_wardn_login_all_apps",
+      "local_logout_preserves_other_app_and_native_sso",
+      "profile_refresh_identity_and_public_alias_preserved",
+      "disable_and_reenable_do_not_revive_old_sessions",
+      "mobile_desktop_pkce_refresh_replay_rejection",
+      "single_wardn_login_all_apps",
+      "global_logout_revokes_all_old_app_sessions"
+    ],
+    "cleanup": true,
+    "phase": "global_logout",
+    "duration_seconds": 197.642
+  },
+  "regional_coverage": {
+    "preflight": "CN home, Chat/Peek/Lanner CN+global lifecycle PASS",
+    "final": "SG home, all five application entries, Corpus included"
+  },
+  "chat_preservation": {
+    "auth_records": 3,
+    "user_files": 10,
+    "fingerprints_equal": true,
+    "actual_process_binary_sha256": "f435bd1b6e0bc03d10c4042174acb2e7b8c96af47424eef6879b466582460c0a",
+    "public_browser_and_downloads": "PASS"
+  },
+  "corpus": {
+    "commit": "640cef0360a367311c806953fdb71a3918d56426",
+    "deployment_commit": "640cef0360a367311c806953fdb71a3918d56426",
+    "binary_sha256": "1eb43b819640464e3feb6edcd207cac26de6014103b75b031632442070a5a620",
+    "package_sha256": "d271ae0b82fa8d29efa2e51b006c9992b3caa40e0d304cd2356e224da61be183",
+    "unchanged_assets_verified": true,
+    "full_readback_verified": true,
+    "fc_code_checksum": "2017547074972540543",
+    "health": 200,
+    "single_provisioned_instance": true,
+    "on_demand_disabled": true,
+    "startup_existing_rows_preservation_gate": true,
+    "native_schema_unchanged": true,
+    "original_password_login_preserved": true,
+    "public_cli_downloads": {
+      "status": "PASS",
+      "sha256": {
+        "amd64": "bfb9b86c37e15e5a33e5ff36b9f18d1156524154e3ecbfb4a0127a877f6eddcd",
+        "arm64": "ce747af5b8dcaafa4f3b74b5d4a420f278ef514a109647a6c6463a2d9daf3b4d"
+      }
+    },
+    "public_assets": {
+      "status": "PASS",
+      "asset_count": 13,
+      "anonymous_auth_me": 401,
+      "readyz": 200,
+      "exact_embedded_asset_sha256": true
+    }
+  },
+  "tests": {
+    "corpus_default_full_service_race": {
+      "result": "PASS",
+      "log_sha256": "dc6981cfe6dd68d7e622a23186462e4f3a768ea784f304dda1b611c8f06f2690"
+    },
+    "corpus_repeated_race_regressions_10": {
+      "result": "PASS",
+      "log_sha256": "22a1de62afdc20cf41ddef6de88843d311999c3336689c6c3936db2824cd004b"
+    },
+    "corpus_auth_race_v031": {
+      "result": "PASS",
+      "log_sha256": "56f52afd1cae983c3253e0ce0bfb2896578d87ac44215ff751fd5946da35a82a"
+    },
+    "corpus_root_enterprise_frontend": {
+      "result": "PASS",
+      "log_sha256": "bd5e455c08a97c26b3fcf81236de82599bdad1f4bb6138abdecfc19e0bb9babe"
+    },
+    "corpus_frontend_build": {
+      "result": "PASS",
+      "log_sha256": "22bc6d28e1451b590d8d7bb85af53e2d2ec5df0c3b41e4fc238979b69a0dd400"
+    },
+    "chat_auth_integration_race": {
+      "result": "PASS",
+      "log_sha256": "717c0881b8cf6076bde394f6c9b41bc0ffce4afe39f1e44f61e2ebb4fbb269a3"
+    },
+    "chat_related_crosspackage_integration_race": {
+      "result": "PASS",
+      "log_sha256": "c7bcda581e1f6939887da1eb4bbbb8685fe16df67583c108d6449b96c1aeafc4"
+    },
+    "chat_public_assets_downloads": {
+      "result": "PASS",
+      "log_sha256": "3cf4c9410efdb07a1b4b159af1cbb19859c1c9ae86d4554b142709ba898d9bbb"
+    },
+    "chat_public_browser": {
+      "result": "PASS",
+      "log_sha256": "d3c7d7900fcc94cc0322a2976cae77cc010f9141b40920115d4dd10181ad1432"
+    },
+    "operations_tools": {
+      "result": "PASS",
+      "log_sha256": "c910f091d74bc474cc2ae216e0f5002b62f8fafab4238cd0444e2cad86963155"
+    },
+    "corpus_profile_projection_and_lifecycle_race": {
+      "result": "PASS",
+      "log_sha256": "2b4b418cfceab2841b42d6288af1be368b84a62bd7d922c8f197cef452910011"
+    }
+  },
+  "corpus_profile_response_regression": {
+    "result": "PASS",
+    "log_sha256": "2b4b418cfceab2841b42d6288af1be368b84a62bd7d922c8f197cef452910011"
+  },
+  "rollback": {
+    "scope": "offline same-source SDK030 compatibility and schema rehearsal; no production downgrade performed",
+    "chat": "SDK030 epoch/outage regression PASS; fallback binary retained",
+    "corpus": "SDK030 profile/epoch/refresh regression and Debian12 runtime PASS; schema53 unchanged; full fallback archive retained",
+    "lanner": "SDK030 epoch/browser/device regressions PASS; both schema5 rehearsals PASS; both fallback packages full readback verified",
+    "peek": "retain verified v031 release as known-good recovery point; do not restore v020",
+    "wardn": "retain verified current native revision release as known-good recovery point"
+  },
+  "scheduling": {
+    "wardn-health": {
+      "timer_enabled": true,
+      "timer_active": true,
+      "first_service_result": "PASS",
+      "schedule": "every 5 minutes"
+    },
+    "wardn-lifecycle": {
+      "timer_enabled": true,
+      "timer_active": true,
+      "first_service_result": "PASS",
+      "schedule": "Sunday 04:00 Asia/Shanghai, randomized delay up to 15 minutes"
+    },
+    "observed_maintenance_alert": "Corpus readiness 429 detected during single-writer release drain; recovered health PASS after activation",
+    "script_installation": {
+      "content_sha256": "814e40f2b40074a3af8611f5d2ba6e0b231df6b8bae406245771f373797530fb",
+      "immutable_release_copy": true,
+      "accepted_source_bytes_identical": true
+    }
+  },
+  "limits": [
+    "WeChat application and real scan acceptance excluded by request.",
+    "Historical failed probe retained; superseded by this complete successful run.",
+    "Production databases were not restored or downgraded for this acceptance."
+  ]
+}

@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 %h/workspace/saker-ai/saker-common/scripts/wardn_release.py health --config %h/.config/wardn-probe/health.json --output %h/.local/state/wardn-probe/health.json
+ExecStart=/usr/bin/python3 %h/.local/lib/wardn-probe/current/wardn_release.py health --config %h/.config/wardn-probe/health.json --output %h/.local/state/wardn-probe/health.json
 TimeoutStartSec=120
 UMask=0077
 NoNewPrivileges=yes
