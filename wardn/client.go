@@ -4,14 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -25,6 +23,8 @@ var ErrLogin = errors.New("wardn: invalid login")
 // Config 只在服务端使用。每个应用及原生客户端使用独立的 ClientID。
 type Config struct {
 	Issuer, DiscoveryURL, ClientID, ClientSecret, RedirectURL, Organization string
+	Region                                                                  string
+	NativeRedirectScheme                                                    string
 	HTTPClient                                                              *http.Client
 	AllowInsecureLoopback                                                   bool
 }
@@ -46,7 +46,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if cfg.ClientID == "" || cfg.ClientSecret == "" || strings.HasSuffix(cfg.Issuer, "/") {
 		return nil, ErrLogin
 	}
-	if !validURL(cfg.Issuer, cfg.AllowInsecureLoopback) || !validURL(cfg.RedirectURL, cfg.AllowInsecureLoopback) {
+	if !validURL(cfg.Issuer, cfg.AllowInsecureLoopback) || !validCallback(cfg.RedirectURL, cfg) {
 		return nil, ErrLogin
 	}
 	issuer, _ := url.Parse(cfg.Issuer)
@@ -64,7 +64,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		base = cfg.HTTPClient.Transport
 	}
 	h := &http.Client{Timeout: 15 * time.Second, Transport: boundedTransport{base}, CheckRedirect: func(*http.Request, []*http.Request) error { return ErrLogin }}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.DiscoveryURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, RegionalURL(cfg.DiscoveryURL, cfg.Region), nil)
 	if err != nil {
 		return nil, ErrLogin
 	}
@@ -80,33 +80,14 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		oidc.ProviderConfig
 		ResponseIssuerRequired bool `json:"authorization_response_iss_parameter_supported"`
 	}
-	if json.NewDecoder(resp.Body).Decode(&metadata) != nil || metadata.IssuerURL != cfg.Issuer {
+	raw, readErr := io.ReadAll(resp.Body)
+	if _, err := strictObject(raw); readErr != nil || err != nil {
 		return nil, ErrLogin
 	}
-	for _, endpoint := range []string{metadata.AuthURL, metadata.TokenURL, metadata.JWKSURL} {
-		if !sameOrigin(cfg.Issuer, endpoint, cfg.AllowInsecureLoopback) {
-			return nil, ErrLogin
-		}
-	}
-	if metadata.UserInfoURL != "" && !sameOrigin(cfg.Issuer, metadata.UserInfoURL, cfg.AllowInsecureLoopback) {
+	if json.Unmarshal(raw, &metadata) != nil || metadata.IssuerURL != cfg.Issuer {
 		return nil, ErrLogin
 	}
-	allowed := []string{"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512", "EdDSA"}
-	algorithms := make([]string, 0, len(metadata.Algorithms))
-	for _, algorithm := range metadata.Algorithms {
-		if slices.Contains(allowed, algorithm) {
-			algorithms = append(algorithms, algorithm)
-		}
-	}
-	if len(algorithms) == 0 {
-		return nil, ErrLogin
-	}
-	metadata.Algorithms = algorithms
-	provider := metadata.NewProvider(oidc.ClientContext(ctx, h))
-	endpoint := provider.Endpoint()
-	// Wardn 原生换码使用表单凭据，避免自动探测重复提交一次性 code。
-	endpoint.AuthStyle = oauth2.AuthStyleInParams
-	return &Client{cfg: cfg, http: h, verifier: provider.Verifier(&oidc.Config{ClientID: cfg.ClientID, SupportedSigningAlgs: algorithms}), responseIssuerRequired: metadata.ResponseIssuerRequired, oauth: oauth2.Config{ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURL: cfg.RedirectURL, Endpoint: endpoint, Scopes: []string{"openid", "profile", "email"}}}, nil
+	return NewWithMetadata(ctx, cfg, Metadata{Issuer: metadata.IssuerURL, AuthorizationURL: metadata.AuthURL, TokenURL: metadata.TokenURL, JWKSURL: metadata.JWKSURL, UserInfoURL: metadata.UserInfoURL, Algorithms: metadata.Algorithms, ResponseIssuerRequired: metadata.ResponseIssuerRequired})
 }
 
 // Attempt 只存放于服务端，禁止传给浏览器或写入公开日志。
@@ -133,14 +114,7 @@ func (c *Client) Begin(ctx context.Context, store AttemptStore, browserToken str
 	if err := store.Save(ctx, a); err != nil {
 		return "", ErrLogin
 	}
-	u, _ := url.Parse(c.oauth.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(a.Verifier)))
-	q := u.Query()
-	q.Del("prompt")
-	if reauthenticate {
-		q.Set("prompt", "login")
-	}
-	u.RawQuery = q.Encode()
-	return u.String(), nil
+	return c.AuthorizationURL(AuthorizationRequest{State: state, Nonce: nonce, Verifier: a.Verifier, Reauthenticate: reauthenticate})
 }
 
 // Complete 原子消费事务，再换码和校验令牌。失败后需要重新开始登录。
@@ -152,25 +126,11 @@ func (c *Client) Complete(ctx context.Context, store AttemptStore, browserToken,
 	if err != nil || a.StateHash != hash(state) || a.BrowserHash != hash(browserToken) || !time.Now().Before(a.ExpiresAt) || a.Nonce == "" || a.Verifier == "" {
 		return Identity{}, ErrLogin
 	}
-	ctx = oidc.ClientContext(ctx, c.http)
-	token, err := c.oauth.Exchange(ctx, code, oauth2.VerifierOption(a.Verifier))
+	token, err := c.ExchangeCode(ctx, code, a.Verifier, "")
 	if err != nil {
-		return Identity{}, ErrLogin
+		return Identity{}, err
 	}
-	raw, _ := token.Extra("id_token").(string)
-	id, err := c.verifier.Verify(ctx, raw)
-	if err != nil {
-		return Identity{}, ErrLogin
-	}
-	var profile Claims
-	if id.Claims(&profile) != nil || strings.TrimSpace(id.Subject) == "" || len(id.Subject) > 255 || subtle.ConstantTimeCompare([]byte(id.Nonce), []byte(a.Nonce)) != 1 || profile.Owner != c.cfg.Organization || profile.NotBefore > time.Now().Unix() || id.IssuedAt.After(time.Now().Add(5*time.Minute)) || profile.AuthorizedParty != "" && profile.AuthorizedParty != c.cfg.ClientID || len(id.Audience) > 1 && profile.AuthorizedParty != c.cfg.ClientID {
-		return Identity{}, ErrLogin
-	}
-	if id.AccessTokenHash != "" && id.VerifyAccessToken(token.AccessToken) != nil {
-		return Identity{}, ErrLogin
-	}
-	profile.Subject = id.Subject
-	return Identity{Issuer: c.cfg.Issuer, Subject: id.Subject, Profile: profile}, nil
+	return c.VerifyToken(ctx, token, a.Nonce)
 }
 
 func randomToken() string {

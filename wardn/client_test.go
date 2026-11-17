@@ -46,7 +46,7 @@ func TestSignedLoginAndRejectedCallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"valid", "reauth", "signature", "nonce", "owner", "audience", "issuer", "azp", "future", "access-hash", "expired-attempt", "browser", "replay"} {
+	for _, mode := range []string{"valid", "reauth", "signature", "nonce", "owner", "audience", "issuer", "azp", "future", "access-hash", "expired-attempt", "browser", "replay", "duplicate-token", "trailing-token"} {
 		t.Run(mode, func(t *testing.T) {
 			var issuer, nonce, challenge string
 			var calls int
@@ -94,7 +94,14 @@ func TestSignedLoginAndRejectedCallbacks(t *testing.T) {
 					if mode == "signature" {
 						sig[0] ^= 1
 					}
-					_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "access", "token_type": "Bearer", "id_token": unsigned + "." + base64.RawURLEncoding.EncodeToString(sig)})
+					bodyOut, _ := json.Marshal(map[string]string{"access_token": "access", "token_type": "Bearer", "id_token": unsigned + "." + base64.RawURLEncoding.EncodeToString(sig)})
+					if mode == "duplicate-token" {
+						bodyOut = append(bodyOut[:len(bodyOut)-1], []byte(`,"id_token":"other"}`)...)
+					}
+					if mode == "trailing-token" {
+						bodyOut = append(bodyOut, []byte(` {}`)...)
+					}
+					_, _ = w.Write(bodyOut)
 				default:
 					http.NotFound(w, r)
 				}
