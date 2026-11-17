@@ -1,0 +1,83 @@
+{
+  "date": "2026-11-17",
+  "module": "github.com/saker-ai/saker-common/wardn",
+  "version": "v0.1.0",
+  "remote_tag": "wardn/v0.1.0",
+  "checks": {
+    "sdk": {
+      "commands": [
+        "GOWORK=off go test -race ./...",
+        "GOWORK=off go vet ./...",
+        "GOWORK=off go build ./..."
+      ],
+      "result": "PASS",
+      "source_commit": "4622d9a351ef9abdccbe77ab5196e5dbef89945a",
+      "log_sha256": {
+        "tests": "dc7e21d73beaeed9439e825cebad36dce0b9fc24094ca8ea2a04f778ff01b639"
+      }
+    },
+    "chat": {
+      "commands": [
+        "go test -race -tags integration ./internal/auth",
+        "go vet ./internal/auth",
+        "CGO_ENABLED=0 go build ./cmd/sakerweb"
+      ],
+      "result": "PASS",
+      "source_commit": "5b8fa72347158255766386dc45727e64c74d75ea",
+      "log_sha256": {
+        "tests": "5cd138d43423174dabb181d56e2a7e1824c4c32f2fc2c3a221e02d7ad2b0b746"
+      },
+      "current_workspace_followup": {
+        "baseline_commit": "edc38511",
+        "commands": [
+          "go test -race -tags integration ./internal/auth -run TestWardnSDKNamesAcrossBrowserAndNative|TestOIDCLoginPersistenceAndLogout"
+        ],
+        "result": "PASS",
+        "log_sha256": "1a1c1855494c6a4d12911468fa6eabbc56edf14e3f0f161578b8750b3b12cfa6"
+      }
+    },
+    "peek": {
+      "commands": [
+        "make fmt-check check test build",
+        "go test -race ./internal/server ./internal/db ./internal/models -run TestWardn|TestOIDC"
+      ],
+      "result": "PASS",
+      "source_commit": "77bb7f175a3559e3de773c90128424bf04c097a0",
+      "log_sha256": {
+        "tests": "532d27e782a58d16c5c57fabbd95d21a9fb1682fdbdf01dc05c6a14fddb99ab7",
+        "race": "e9e8fed2ab53f9714a0b644f0040b3f7af80b1003d3f3d013cb491adf0e74ab1"
+      }
+    },
+    "lanner": {
+      "commands": [
+        "make fmt vet test build",
+        "go test -race -tags localintegration ./internal/unified -run TestWardn|TestLocalLoginNameIsPrivateFreshAndSeparateFromCommunityAlias"
+      ],
+      "result": "PASS",
+      "source_commit": "759d4029ea7955af15514cde70b410a30cb7b7a8",
+      "log_sha256": {
+        "tests": "6ccc43792c8aad689656d8c97a8baa8a39b7fd944e2e254593b8d491c2ee88f6",
+        "race": "79c5fbbcd111df4829319f8712849f61fdf1d97418d397e3557bcc5eff7dc358"
+      }
+    },
+    "corpus": {
+      "commands": [
+        "CGO_ENABLED=1 go test -race ./internal/application/service -run TestWardnNativeSSO|Test.*OIDC"
+      ],
+      "result": "PASS",
+      "source_commit": "c74f8ce6e16720a8eb60d8d00d42017efd664630",
+      "full_platform_frontend_gates": "NOT_RUN",
+      "log_sha256": {
+        "race": "3b6ee8afd1ebff000040b342390733bfc813b29a9200f4d1b2c0765d5b05d815"
+      }
+    }
+  },
+  "independent_consumer": {
+    "remote_go_get_without_local_replace": "PASS",
+    "v0_1_0_build": "PASS",
+    "live_wardn_cn_and_global_oidc_sso_profile_identity_replay": "PASS",
+    "synthetic_account_cleanup": "PASS"
+  },
+  "application_adapter_rollout": "SOURCE_ONLY_NOT_DEPLOYED",
+  "migration_scope": "Existing applications share Claims normalization; existing OIDC persistence, verification and business sessions remain. New applications can use New/Begin/Complete."
+}
