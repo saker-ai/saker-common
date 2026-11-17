@@ -191,3 +191,15 @@ func (a *Accounts) fetch(ctx context.Context, subject, idToken string) (AccountS
 	}
 	return state, nil
 }
+
+// Invalidate 清除指定账号已完成的资料缓存；空 subject 清除全部已完成缓存。
+// 正在执行的查询仍由原生服务决定。
+func (a *Accounts) Invalidate(subject string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for key, entry := range a.cache {
+		if (subject == "" || key == subject) && entry.done == nil {
+			delete(a.cache, key)
+		}
+	}
+}

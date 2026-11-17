@@ -99,3 +99,23 @@ func TestAccountsRejectInvalidAuthority(t *testing.T) {
 		})
 	}
 }
+
+func TestAccountsInvalidate(t *testing.T) {
+	for _, subject := range []string{"user", ""} {
+		t.Run("subject="+subject, func(t *testing.T) {
+			pending := &accountSnapshot{done: make(chan struct{})}
+			accounts := &Accounts{cache: map[string]*accountSnapshot{
+				"user":    {until: time.Now().Add(time.Hour)},
+				"other":   {until: time.Now().Add(time.Hour)},
+				"pending": pending,
+			}}
+			accounts.Invalidate(subject)
+			if accounts.cache["user"] != nil || accounts.cache["pending"] != pending {
+				t.Fatal("completed cache retained or pending query removed")
+			}
+			if (accounts.cache["other"] == nil) != (subject == "") {
+				t.Fatal("invalidation affected the wrong subject")
+			}
+		})
+	}
+}
