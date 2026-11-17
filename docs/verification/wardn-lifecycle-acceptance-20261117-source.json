@@ -1,0 +1,47 @@
+{
+  "schema": "wardn-release/v1",
+  "status": "INVENTORY",
+  "components": {
+    "sdk": {
+      "commit": "d6cea7820c0f441ed1b8610654a72cd67402292f",
+      "clean": true,
+      "sdk_version": null,
+      "local_replace": false
+    },
+    "wardn": {
+      "commit": "88a351fe3747b710a9da934f9b1ae58a6b42c77c",
+      "clean": true,
+      "sdk_version": null,
+      "local_replace": false,
+      "binary_sha256": "4b64bcac3bec668fe86e36377b55acb7d697731c4616c6c24060418d2044652f"
+    },
+    "chat": {
+      "commit": "7a17e66e6e50863f7e43a07887ee1e353ff9467a",
+      "clean": true,
+      "sdk_version": "v0.3.1",
+      "local_replace": false,
+      "binary_sha256": "f435bd1b6e0bc03d10c4042174acb2e7b8c96af47424eef6879b466582460c0a"
+    },
+    "peek": {
+      "commit": "b247784ebb7a8eaf2cb71c414a934ee75dde26b3",
+      "clean": true,
+      "sdk_version": "v0.3.1",
+      "local_replace": false,
+      "binary_sha256": "6f3a45d00dae669ee4c01a528589d462c775706901480000fb3dc5060f306c95"
+    },
+    "lanner": {
+      "commit": "1971fa43c69bf727aa709a64dfcdacee12b05167",
+      "clean": true,
+      "sdk_version": "v0.3.1",
+      "local_replace": false,
+      "binary_sha256": "dc713f7e91ddff68269312901a5592e6d85f7defeb216a84026d5d8135eeb72a"
+    },
+    "corpus": {
+      "commit": "640cef0360a367311c806953fdb71a3918d56426",
+      "clean": true,
+      "sdk_version": "v0.3.1",
+      "local_replace": false,
+      "binary_sha256": "1eb43b819640464e3feb6edcd207cac26de6014103b75b031632442070a5a620"
+    }
+  }
+}

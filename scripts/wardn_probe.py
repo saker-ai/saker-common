@@ -11,6 +11,7 @@ from pathlib import Path
 import secrets
 import signal
 import stat
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -98,6 +99,11 @@ class Probe:
         self.homes = {}
         self.devices = {}
         self.checks = []
+        self.phase = "initializing"
+
+    def progress(self, phase):
+        self.phase = phase
+        print(json.dumps({"phase": phase}), file=sys.stderr, flush=True)
 
     def native(self, session, route, payload=None):
         url = self.issuer + '/api/' + route
@@ -115,6 +121,7 @@ class Probe:
                     'password': password, 'method': 'signin', 'language': 'en'})
 
     def setup(self):
+        self.progress("setup")
         admin_password = private_file(self.cfg['admin_password_file']).read_text().strip()
         self.login(self.admin, 'built-in', 'app-built-in', self.cfg.get('admin_name', 'admin'), admin_password)
         name = 'wardn-probe-' + uuid.uuid4().hex
@@ -128,6 +135,7 @@ class Probe:
     def signins(self):
         apps = self.cfg['apps']
         for label, base in apps.items():
+            self.progress('signin_' + label)
             base = base.rstrip('/')
             start = {'chat': '/auth/oidc', 'peek': '/oauth/oidc/start',
                      'corpus': '/api/v1/auth/oidc/start'}.get(label, '/auth/wardn/start')
@@ -199,6 +207,7 @@ class Probe:
     def native_devices(self):
         base = self.cfg['apps']['chat'].rstrip('/')
         for platform in ('mobile', 'desktop'):
+            self.progress('device_' + platform)
             verifier, state = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
             challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip('=')
             status, _, body, _ = self.post_json(base + '/auth/native/start',
@@ -228,6 +237,26 @@ class Probe:
             self.devices[platform] = refreshed
         self.checks.append('mobile_desktop_pkce_refresh_replay_rejection')
 
+    def local_logout(self):
+        self.progress('local_logout')
+        base = self.cfg['apps']['chat'].rstrip('/')
+        status, _, body, _ = self.guest.request(base + '/api/me')
+        expect(status == 200, 'local_logout_session')
+        parsed = urllib.parse.urlsplit(base)
+        origin = parsed.scheme + '://' + parsed.netloc
+        status, _, _, _ = self.guest.request(base + '/auth/logout', 'POST', b'',
+                    {'Origin': origin, 'X-CSRF-Token': json.loads(body)['csrf_token']})
+        expect(status == 200, 'local_logout_failed')
+        expect(self.guest.request(base + '/api/me')[0] == 401, 'local_logout_cookie_active')
+        if 'peek' in self.cfg['apps']:
+            expect(self.guest.request(self.cfg['apps']['peek'].rstrip('/') + '/dashboard')[0] == 200,
+                   'local_logout_affected_other_app')
+        status, _, _, location = self.guest.follow(base + '/auth/oidc')
+        expect(status == 200 and urllib.parse.urlsplit(location).hostname == parsed.hostname,
+               'local_logout_destroyed_native_sso')
+        self.check_sessions(True)
+        self.checks.append('local_logout_preserves_other_app_and_native_sso')
+
     def update(self, **changes):
         expect(self.user is not None and self.user['name'].startswith('wardn-probe-'), 'unowned_fixture')
         query = urllib.parse.urlencode({'id': 'saker/' + self.user['name']})
@@ -239,11 +268,14 @@ class Probe:
     def run(self):
         self.setup()
         self.signins()
+        self.local_logout()
         new_name = 'Wardn refreshed ' + self.user['name'][-8:]
+        self.progress('profile_refresh')
         self.update(displayName=new_name)
         time.sleep(3)
         self.check_sessions(True, new_name)
         self.checks.append('profile_refresh_identity_and_public_alias_preserved')
+        self.progress('disable_reenable')
         self.update(isForbidden=True)
         time.sleep(3)
         self.check_sessions(False)
@@ -253,6 +285,7 @@ class Probe:
         self.checks.append('disable_and_reenable_do_not_revive_old_sessions')
         self.login(self.guest, 'saker', self.cfg.get('login_application', 'saker-web'), self.user['name'], self.user['password'])
         self.signins()
+        self.progress('global_logout')
         url = self.issuer + '/api/login/oauth/wardn-global-logout'
         status, _, body, _ = self.guest.request(url)
         expect(status == 200, 'global_logout_confirmation')
@@ -304,6 +337,7 @@ def main():
     finally:
         if probe:
             receipt['checks'] = probe.checks
+            receipt['phase'] = probe.phase
             try:
                 receipt['cleanup'] = probe.cleanup()
             except Exception:

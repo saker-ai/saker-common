@@ -1,0 +1,68 @@
+{
+  "schema": "wardn-runtime/v1",
+  "components": {
+    "sdk": {
+      "commit": "d6cea7820c0f441ed1b8610654a72cd67402292f",
+      "consumer_import": "PASS"
+    },
+    "wardn": {
+      "commit": "88a351fe3747b710a9da934f9b1ae58a6b42c77c",
+      "binary_sha256": "4b64bcac3bec668fe86e36377b55acb7d697731c4616c6c24060418d2044652f",
+      "backup_sha256": "cd7bf18f963146e0b27323c42b0887d8b334dd1dbcb63e3ddee8e0a430d4d28d",
+      "rollback_sha256": "4b64bcac3bec668fe86e36377b55acb7d697731c4616c6c24060418d2044652f",
+      "schema_version": "native wardn_session_revision",
+      "migration": "PASS",
+      "health": "PASS",
+      "data_preservation": "PASS"
+    },
+    "chat": {
+      "commit": "7a17e66e6e50863f7e43a07887ee1e353ff9467a",
+      "binary_sha256": "f435bd1b6e0bc03d10c4042174acb2e7b8c96af47424eef6879b466582460c0a",
+      "backup_sha256": "d37014de1451922f4222e934eeb71eee20b6964f1524d6e14ef763b22eb4d045",
+      "rollback_sha256": "0352a3a119d57e61287085c2a3ac7b7c8d79411e89352ab85719127ea9f7d979",
+      "schema_version": "unchanged native ledger",
+      "migration": "UNCHANGED",
+      "health": "PASS",
+      "data_preservation": "PASS"
+    },
+    "peek": {
+      "commit": "b247784ebb7a8eaf2cb71c414a934ee75dde26b3",
+      "binary_sha256": "6f3a45d00dae669ee4c01a528589d462c775706901480000fb3dc5060f306c95",
+      "backup_sha256": "2b578cbfe7de8bed25f29379a02576e344e7d4797333a50c921011ac1b7f31e5",
+      "rollback_sha256": "6f3a45d00dae669ee4c01a528589d462c775706901480000fb3dc5060f306c95",
+      "schema_version": 25,
+      "migration": "UNCHANGED",
+      "health": "PASS",
+      "data_preservation": "PASS"
+    },
+    "lanner": {
+      "commit": "1971fa43c69bf727aa709a64dfcdacee12b05167",
+      "binary_sha256": "dc713f7e91ddff68269312901a5592e6d85f7defeb216a84026d5d8135eeb72a",
+      "backup_sha256": "44d886c7c3f4e57b9feacbce90bbbf852fc2b546e589ad9a97968d752578559a",
+      "rollback_sha256": "dc3113e8b6bac64c796ab3794ad92498b7c7a6aa2881684b6687f045b579b8c9",
+      "schema_version": 5,
+      "migration": "PASS",
+      "health": "PASS",
+      "data_preservation": "PASS"
+    },
+    "corpus": {
+      "commit": "640cef0360a367311c806953fdb71a3918d56426",
+      "binary_sha256": "1eb43b819640464e3feb6edcd207cac26de6014103b75b031632442070a5a620",
+      "backup_sha256": "ebed0277c24646abe67eb9e4d1b22b6e416921677c189f8ea025201313a9b19f",
+      "rollback_sha256": "421ea056f08f86accc6f56e63efcf5195e3ec956266a488a4c1c59c268b84275",
+      "schema_version": 53,
+      "migration": "UNCHANGED",
+      "health": "PASS",
+      "data_preservation": "PASS"
+    }
+  },
+  "acceptance": {
+    "sso": "PASS",
+    "profile_refresh": "PASS",
+    "disable_reenable": "PASS",
+    "global_logout": "PASS",
+    "old_token_replay": "PASS",
+    "rollback": "PASS"
+  },
+  "cleanup": "PASS"
+}

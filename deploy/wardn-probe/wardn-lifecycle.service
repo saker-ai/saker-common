@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 %h/workspace/saker-ai/saker-common/scripts/wardn_probe.py --config %h/.config/wardn-probe/lifecycle.json --output %h/.local/state/wardn-probe/lifecycle.json
+ExecStart=/usr/bin/python3 %h/.local/lib/wardn-probe/current/wardn_probe.py --config %h/.config/wardn-probe/lifecycle.json --output %h/.local/state/wardn-probe/lifecycle.json
 TimeoutStartSec=15min
 KillSignal=SIGINT
 TimeoutStopSec=120
