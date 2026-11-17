@@ -1,0 +1,94 @@
+{
+  "schema": "wardn.consumer-rollout/v1",
+  "status": "DEPLOYED_VERIFIED",
+  "sdk": {
+    "module": "github.com/saker-ai/saker-common/wardn",
+    "version": "v0.3.1",
+    "tag_commit": "d6cea7820c0f441ed1b8610654a72cd67402292f",
+    "sum": "h1:Qukchu4499v6rWgeUirODtA2Y7lWTB/ukee7JJuL8kE="
+  },
+  "applications": {
+    "Peek": {
+      "sites": [
+        "cn"
+      ],
+      "sdk": "v0.3.1",
+      "source_commit": "b247784ebb7a8eaf2cb71c414a934ee75dde26b3",
+      "binary_sha256": "6f3a45d00dae669ee4c01a528589d462c775706901480000fb3dc5060f306c95",
+      "live_api_and_worker_files_verified": true,
+      "public_verification": "PASS",
+      "receipt": "https://github.com/saker-ai/peek/blob/main/docs/verification/wardn-sdk-v031-production-20261117.json"
+    },
+    "SakerWeb_Chat": {
+      "sites": [
+        "cn"
+      ],
+      "sdk": "v0.3.1",
+      "source_commit": "7a17e66e6e50863f7e43a07887ee1e353ff9467a",
+      "binary_sha256": "f435bd1b6e0bc03d10c4042174acb2e7b8c96af47424eef6879b466582460c0a",
+      "live_process_module_and_sha_verified": true
+    },
+    "Lanner": {
+      "sites": [
+        "cn",
+        "global"
+      ],
+      "sdk": "v0.3.1",
+      "source_commit": "1971fa43c69bf727aa709a64dfcdacee12b05167",
+      "binary_sha256": "dc713f7e91ddff68269312901a5592e6d85f7defeb216a84026d5d8135eeb72a",
+      "public_build_and_resource_verification": "PASS",
+      "database_schema": 5,
+      "backup_and_isolated_restore": "PASS",
+      "transactional_migration_rehearsal": "PASS",
+      "existing_business_record_fingerprints_preserved": true,
+      "fc_checksums": {
+        "cn": "17080074806354792295",
+        "global": "1734894331997896652"
+      },
+      "receipt": "https://github.com/saker-ai/lanner-cloud/blob/main/docs/verification/wardn-sdk-v031-regional-20261117.json"
+    },
+    "Corpus": {
+      "sites": [
+        "global"
+      ],
+      "sdk": "v0.3.1",
+      "source_commit": "640cef0360a367311c806953fdb71a3918d56426",
+      "binary_sha256": "1eb43b819640464e3feb6edcd207cac26de6014103b75b031632442070a5a620",
+      "fc_code_checksum": "2017547074972540543",
+      "status": "DEPLOYED_VERIFIED",
+      "private_profile_projection_fixed": true,
+      "package_sha256": "d271ae0b82fa8d29efa2e51b006c9992b3caa40e0d304cd2356e224da61be183"
+    }
+  },
+  "shared_identity": {
+    "cn_source": "1679fa2b870b88f726e353e4810dcddda140ad44",
+    "global_source": "88a351fe3747b710a9da934f9b1ae58a6b42c77c",
+    "global_fc_checksum": "13284653016205223344",
+    "two_site_real_application_credential_check": "PASS",
+    "same_issuer_jwks_account_profile_and_revision": true,
+    "wrong_secret_invalid_token_foreign_origin_denied": true,
+    "receipt": "https://github.com/saker-ai/wardn/blob/main/docs/verification/wardn-sdk-v031-global-20261117.json"
+  },
+  "verification": {
+    "final_five_entry_probe": "PASS",
+    "duration_seconds": 197.642,
+    "lifecycle_report_sha256": "5c0b4a686283e8d90899ed3e6ebd216a8e97778391a6562889a475e2cbe081b8",
+    "probe_execution": "systemd oneshot service exited 0",
+    "synthetic_identity_cleanup": true,
+    "scenarios": [
+      "新加坡Lanner home及跨入口归属",
+      "五入口原生SSO",
+      "应用普通退出不影响Peek或原生SSO",
+      "原生私有资料修改后刷新",
+      "停用后重新启用不复活旧应用会话",
+      "手机/桌面PKCE及refresh重放拒绝",
+      "全局退出后旧应用会话与原生派生凭据拒绝"
+    ],
+    "recovered_failure": "首次五站验收发现Corpus UserInfo响应遗漏私有资料字段；640cef0修复、回归、重新构建发布后完整重验通过。首次失败不计PASS。"
+  },
+  "limitations": [
+    "真实线上合成账号验证不等同于真人账号交互验收。",
+    "物理移动/桌面设备安装验收不在本次范围内。"
+  ],
+  "verified_at": "2026-11-17T10:48:23.200754+00:00"
+}
