@@ -52,8 +52,8 @@ func TestAccountsLifecycle(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	if calls.Load() != 2 {
-		t.Fatalf("unmerged requests: %d", calls.Load())
+	if calls.Load() != 1 {
+		t.Fatalf("login state was fetched again: %d", calls.Load())
 	}
 	revision.Store(1)
 	accounts.mu.Lock()

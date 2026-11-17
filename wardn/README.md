@@ -53,6 +53,10 @@ GOWORK=off go build ./...
 
 每次受保护访问调用 `Check(ctx, subject, storedRevision)`；成功时可用 `state.Profile().AccountName()` 刷新私有展示名。缓存上限两秒，过期授权遇到上游故障不会继续放行。`ErrRevoked` 对应身份/会话失效，`ErrUnavailable` 对应暂时故障，应返回 503 并保留可重试凭据。
 
+每组固定的 issuer/client/organization/region 配置在服务启动时创建一个 `Accounts` 并复用；不要逐请求创建客户端或再加业务侧身份缓存。SDK 直接访问固定原生账号端点，无需 discovery，也不携带浏览器 Cookie。成功的 `Capture` 会预热至多两秒的正向缓存，让登录后的首屏复用刚验证的账号状态；并发失效或查询时保守跳过预热，晚到的旧版本不能覆盖已知新版本。
+
+同一账号的并发 `Check` 共享一次请求，包括这次请求的失败结果，避免故障时等待者逐个重试；失败不写入缓存，后续独立调用仍会重新查询。过期数据不会在故障时延用，撤销版本必须精确匹配。`Capture` 始终在线验证本次 ID token，不从缓存完成登录。
+
 普通退出撤销应用自己的会话；全局退出跳转 `accounts.GlobalLogoutURL()`，由 Wardn 原生确认页验证用户与 CSRF。派生设备凭据继承签发来源的版本；不能在请求校验时用当前版本覆盖旧版本。
 
 发布、兼容策略和可运行的跨应用巡检见 [统一账号运维说明](../docs/wardn-operations.md)。
