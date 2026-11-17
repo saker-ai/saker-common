@@ -1,0 +1,17 @@
+[Unit]
+Description=Wardn owned synthetic account lifecycle checks
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/workspace/saker-ai/saker-common/scripts/wardn_probe.py --config %h/.config/wardn-probe/lifecycle.json --output %h/.local/state/wardn-probe/lifecycle.json
+TimeoutStartSec=15min
+KillSignal=SIGINT
+TimeoutStopSec=120
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/state/wardn-probe
