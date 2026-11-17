@@ -1,0 +1,11 @@
+{
+ "services":{
+ "chat-cn":{"url":"https://chat.bxf.me/cn/healthz"},
+ "peek-cn":{"url":"https://peek.bxf.me/cn/readyz"},
+ "lanner-cn":{"url":"https://lanner.bxf.me/cn/api/pulse/v1/meta","body_contains":"build_sha"},
+ "lanner-global":{"url":"https://lanner.bxf.me/global/api/pulse/v1/meta","body_contains":"build_sha"},
+ "corpus":{"url":"https://corpus.bxf.me/readyz"},
+ "chat-retired":{"url":"https://chat.bxf.me/global/healthz","status":410},
+ "peek-retired":{"url":"https://peek.bxf.me/global/readyz","status":410}
+ }
+}

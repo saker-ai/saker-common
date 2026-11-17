@@ -1,0 +1,10 @@
+[Unit]
+Description=Check complete Wardn lifecycle weekly with an owned synthetic account
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

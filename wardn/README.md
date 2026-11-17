@@ -46,3 +46,13 @@ GOWORK=off go build ./...
 应用已有原子事务、cookie 和 PKCE 存储时，使用同一 `Client` 的 `AuthorizationURL(AuthorizationRequest)`、`ExchangeCode`、`VerifyToken`；必须先匹配浏览器、验证一次性 state 并原子消费事务，随后才换码。SDK 的 `Begin/Complete` 也使用这些相同协议函数，没有两套令牌验证实现。应用不能省略 nonce 验证或退回自行解析未验证令牌。
 
 `Config.Region` 只选择 Wardn 的传输端点，不改变规范 issuer。已有可信显式配置可使用 `NewWithMetadata`，仍检查所有端点同源和算法。原生客户端提交 S256 challenge，通过 `AuthorizationRequest.CodeChallenge` 保留设备端 PKCE；应用注册的私有回调协议通过 `NativeRedirectScheme` 显式允许且保持回调固定。桌面 loopback 回调需显式允许 loopback HTTP；公开服务端和远程 issuer 仍要求 HTTPS。
+
+## v0.3：会话撤销与资料刷新
+
+用同一服务端配置构造 `accounts, err := wardn.NewAccounts(cfg)`。OIDC 验证通过后，在原生 ID token 尚有效时调用 `Capture(ctx, subject, rawIDToken)`，将返回的 `Revision` 和原有 issuer/sub 一起保存到业务会话；不要持久化该 ID token。
+
+每次受保护访问调用 `Check(ctx, subject, storedRevision)`；成功时可用 `state.Profile().AccountName()` 刷新私有展示名。缓存上限两秒，过期授权遇到上游故障不会继续放行。`ErrRevoked` 对应身份/会话失效，`ErrUnavailable` 对应暂时故障，应返回 503 并保留可重试凭据。
+
+普通退出撤销应用自己的会话；全局退出跳转 `accounts.GlobalLogoutURL()`，由 Wardn 原生确认页验证用户与 CSRF。派生设备凭据继承签发来源的版本；不能在请求校验时用当前版本覆盖旧版本。
+
+发布、兼容策略和可运行的跨应用巡检见 [统一账号运维说明](../docs/wardn-operations.md)。
