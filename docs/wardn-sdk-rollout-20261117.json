@@ -1,0 +1,321 @@
+{
+  "sdk_version": "v0.2.0",
+  "sources": {
+    "common": {
+      "source_commit": "1ad6633a8af5c272ffc869535e83b80acf77863c",
+      "source_clean": true,
+      "merged_in_main": true
+    },
+    "chat": {
+      "source_commit": "a07d81ee60623fc09f18a24c7476aa83a8e263b7",
+      "source_clean": true,
+      "merged_in_main": true,
+      "runtime_source_commit": "a07d81ee60623fc09f18a24c7476aa83a8e263b7",
+      "main_with_fixture_and_rollout_docs": "c925ac540bac93ddbbe6c3ae30fe31d1d6408165"
+    },
+    "peek": {
+      "source_commit": "9ac0c9b31abead0f8aa8bdc0259b4d08d79e5025",
+      "source_clean": true,
+      "merged_in_main": true
+    },
+    "corpus": {
+      "source_commit": "572a53be09995409b8785d8290b143fe9bb50908",
+      "source_clean": true,
+      "merged_in_main": true
+    },
+    "lanner": {
+      "source_commit": "21ff2cc9be406f618cd6941c7634182ad7ca9b96",
+      "source_clean": true,
+      "merged_in_main": true
+    }
+  },
+  "checks": {
+    "sdk": {
+      "result": "PASS",
+      "log_sha256": "42a5de8905a867ef4a422442159720db94ef7ba199f58d63b08735a04ed6608e"
+    },
+    "common_root": {
+      "result": "PASS",
+      "log_sha256": "80698534aa8e3284377c6142df5cff74470de3d4cee57640b9e14ed8bbddf750"
+    },
+    "chat_unit": {
+      "result": "PASS",
+      "log_sha256": "8b947115a5bf5c8a176d02b41919ce7d045928707a980afb1a529a8f675e3a00"
+    },
+    "chat_integration_final": {
+      "result": "PASS",
+      "log_sha256": "d8ad52fbd3cc8debd35a67fddf0b76831bda1fbe62025024bc583a863d369daf"
+    },
+    "chat_latest_merge_affected": {
+      "result": "PASS",
+      "log_sha256": "494924bced5e348e614b9ed51e0ab1f02e5608b65ecb3f4f62774082d37d9b81"
+    },
+    "chat_composer": {
+      "result": "PASS",
+      "log_sha256": "6f26486a045c725eba4eed692de81c08712726d15115d1a421e071f7c891366d"
+    },
+    "peek_gates": {
+      "result": "PASS",
+      "log_sha256": "1e8fa357f81f88d821daa480fb9344df25ac1366f62e985857b4526610e0f5b3"
+    },
+    "peek_full_race": {
+      "result": "PASS",
+      "log_sha256": "9db03a58923e377c950ab1d299573c5da70bc8e8ffd11702f31b6c7bbe4f856e"
+    },
+    "peek_auth_final": {
+      "result": "PASS",
+      "log_sha256": "7f597f20e2dfb1c6f9bed37a763a1c802b21032d53978895774ceb6452c0f4ed"
+    },
+    "lanner_gates": {
+      "result": "PASS",
+      "log_sha256": "2dad9315699c8e2d3c81dca87ebee9622af1ce07dc3088166bca521900504e14"
+    },
+    "lanner_signed_login_privacy": {
+      "result": "PASS",
+      "log_sha256": "e2bac91266c9eee90bcd7a5de21ebdd7d7db4cda8e7fcf98e5c3e32f7b5a90d5"
+    },
+    "corpus_wardn_oidc_race": {
+      "result": "PASS",
+      "log_sha256": "e872cfbe7d23cb95c5db28c626d69ae6ef6469211b3f0cbd24b35b9ad7003c4b"
+    },
+    "corpus_native_tools_auth": {
+      "result": "PASS",
+      "log_sha256": "1bcdf7a0053cb71d44ad7a45d83dc8bf45829619c8cde75444958c819de7057c"
+    },
+    "corpus_enterprise_race": {
+      "result": "PASS",
+      "log_sha256": "d602e49c814faee2afd67e99b6bfc1a37c20ec1c56983ac8999b8b179ef51d0e"
+    },
+    "corpus_root": {
+      "result": "PASS",
+      "log_sha256": "8b987c06469b1cdd1810632ce1f218dd04ff54d8d13fda0b13b05402549ee029"
+    },
+    "corpus_frontend_types": {
+      "result": "PASS",
+      "log_sha256": "61ee366e35747b26f12ff48ed7b4d5f30ce57880e7ec15a9075afaf4132a4369"
+    },
+    "corpus_frontend_tests": {
+      "result": "PASS",
+      "log_sha256": "f37199b627ca032dc1faa7dfbc2bfe658e10e13adc5f27667cc223c65739f6e0"
+    },
+    "external_live_sdk": {
+      "result": "PASS",
+      "log_sha256": "508b1adf0d81a8791aa69d60a5d9a5ae155d9b74d64569249dc16c119c6c10ea"
+    },
+    "corpus_extra_full_service": {
+      "result": "FAIL",
+      "baseline_reproduced": true,
+      "reason": "native tools tag missing in extra check; pre-existing races in test fakes and archive timeout; auth/native/enterprise/frontend checks passed",
+      "details": "corpus/docs/wardn-sdk-test-boundaries-20261117.md"
+    },
+    "chat_composer_browser_fixture": {
+      "result": "PASS",
+      "source": "coordinated publisher ran native composer browser acceptance after adding signed owner to local fixture",
+      "fixture_commit": "0ad92d14f6e1a7df4641e58211987baf799d8930"
+    }
+  },
+  "database_changes": {
+    "lanner-cn": {
+      "from": 2,
+      "to": 4,
+      "transaction_rehearsal_rollback": "PASS"
+    },
+    "lanner-global": {
+      "from": 2,
+      "to": 4,
+      "transaction_rehearsal_rollback": "PASS"
+    },
+    "peek": {
+      "schema": "peek",
+      "from": 19,
+      "to": 25,
+      "shared_public_schema_untouched": true
+    },
+    "corpus": {
+      "native_schema_unchanged": true,
+      "existing_account_preservation_startup_gate": "PASS"
+    }
+  },
+  "independent_sdk_v0_2_remote_import_and_live_oidc": "PASS",
+  "partial_live": {
+    "peek": {
+      "dashboard_http": 200
+    },
+    "lanner-cn": {
+      "home": "cn",
+      "private_email_label": true,
+      "public_alias_unchanged": true
+    },
+    "lanner-global": {
+      "home": "cn",
+      "private_email_label": true,
+      "public_alias_unchanged": true
+    },
+    "corpus": {
+      "native_me_http": 200,
+      "ordinary_user": true,
+      "non_uuid_business_name": true
+    }
+  },
+  "source_tree_note": "Chat final fixture is authoritatively committed as 0ad92d14 on main; duplicate local fixture-only commit 6a26a017 has identical tree. Runtime candidate a07d81ee includes both SDK and concurrent composer change.",
+  "live_sso": {
+    "attempt_1": {
+      "chat": {
+        "subject": "577b3931-454f-4fc0-8b39-e280a4cfaed3",
+        "tenant_id": "personal_MJYxr1pvxpXnS_gAeqYzwWAIAuwfRJ_cKhaYCwMpSWg"
+      },
+      "peek": {
+        "dashboard_http": 200
+      },
+      "lanner-cn": {
+        "home": "cn",
+        "private_email_label": true,
+        "public_alias_unchanged": true
+      },
+      "lanner-global": {
+        "home": "cn",
+        "private_email_label": true,
+        "public_alias_unchanged": true
+      },
+      "corpus": {
+        "native_me_http": 200,
+        "ordinary_user": true,
+        "non_uuid_business_name": true
+      }
+    },
+    "attempt_2": {
+      "chat": {
+        "subject": "577b3931-454f-4fc0-8b39-e280a4cfaed3",
+        "tenant_id": "personal_MJYxr1pvxpXnS_gAeqYzwWAIAuwfRJ_cKhaYCwMpSWg"
+      },
+      "peek": {
+        "dashboard_http": 200
+      },
+      "lanner-cn": {
+        "home": "cn",
+        "private_email_label": true,
+        "public_alias_unchanged": true
+      },
+      "lanner-global": {
+        "home": "cn",
+        "private_email_label": true,
+        "public_alias_unchanged": true
+      },
+      "corpus": {
+        "native_me_http": 200,
+        "ordinary_user": true,
+        "non_uuid_business_name": true
+      }
+    },
+    "result": "PASS",
+    "old_chat_session_preserved": true,
+    "peek_post_deployment_session_verified": true,
+    "peek_pre_release_cookie_recheck": "NOT_RUN: session intentionally renewed during partial acceptance",
+    "one_wardn_password_login_reused": true,
+    "immutable_identities_preserved": true
+  },
+  "native_clients": {
+    "result": "PASS",
+    "checks": [
+      {
+        "platform": "mobile",
+        "result": "PASS",
+        "wardn_session_reused": true,
+        "device_pkce_verified": true,
+        "verified_email_label": true,
+        "bearer_session": true,
+        "refresh": true,
+        "logout_revocation": true
+      },
+      {
+        "platform": "desktop",
+        "result": "PASS",
+        "wardn_session_reused": true,
+        "device_pkce_verified": true,
+        "verified_email_label": true,
+        "bearer_session": true,
+        "refresh": true,
+        "logout_revocation": true
+      }
+    ]
+  },
+  "public_health": [
+    {
+      "url": "https://chat.bxf.me/cn/healthz",
+      "status": 200
+    },
+    {
+      "url": "https://peek.bxf.me/cn/readyz",
+      "status": 200
+    },
+    {
+      "url": "https://corpus.bxf.me/readyz",
+      "status": 200
+    },
+    {
+      "url": "https://lanner.bxf.me/cn/api/pulse/v1/meta",
+      "status": 200,
+      "build_sha": "21ff2cc9be406f618cd6941c7634182ad7ca9b96"
+    },
+    {
+      "url": "https://lanner.bxf.me/global/api/pulse/v1/meta",
+      "status": 200,
+      "build_sha": "21ff2cc9be406f618cd6941c7634182ad7ca9b96"
+    },
+    {
+      "url": "https://chat.bxf.me/global/healthz",
+      "status": 410
+    },
+    {
+      "url": "https://peek.bxf.me/global/readyz",
+      "status": 410
+    }
+  ],
+  "deployments": {
+    "sakerweb": {
+      "commit": "a07d81ee60623fc09f18a24c7476aa83a8e263b7",
+      "binary_sha256": "bb0740d23fb5fc23a1857e49be1efaf6f9b59bfd7afdcceaba112fafd827363a",
+      "health": 200,
+      "configuration_preserved": true,
+      "fixture_and_docs_main": "c925ac540bac93ddbbe6c3ae30fe31d1d6408165"
+    },
+    "peek": {
+      "commit": "9ac0c9b31abead0f8aa8bdc0259b4d08d79e5025",
+      "sha256": "f10965923e93c30d3bb9d46694ea917545715938e48c1b97c59eb8043364bae3",
+      "health": 200,
+      "configuration_preserved": true
+    },
+    "corpus": {
+      "commit": "572a53be09995409b8785d8290b143fe9bb50908",
+      "binary_sha256": "5ddf053b6c04bc6d063d0f92e39b297d9b7e5334103b804779bdee785dafb3a7",
+      "package_sha256": "d5b757260d0e7d40d7f89caf790c68df20cd62acfed2423f3d2ec7360799d11e",
+      "health": 200,
+      "single_provisioned_instance": true,
+      "startup_existing_rows_preservation_gate": true,
+      "native_schema_unchanged": true
+    },
+    "lanner-cn": {
+      "commit": "21ff2cc9be406f618cd6941c7634182ad7ca9b96",
+      "binary_sha256": "c68e25835b57ef94a92eea6000f7be657128679fc804b30154be034123aa7519",
+      "archive_sha256": "a15219ed68713570d1d25b9fde68bcbb3e3b5396edf5f01f80004e7a550fa019",
+      "health": 200
+    },
+    "lanner-global": {
+      "commit": "21ff2cc9be406f618cd6941c7634182ad7ca9b96",
+      "binary_sha256": "c68e25835b57ef94a92eea6000f7be657128679fc804b30154be034123aa7519",
+      "archive_sha256": "d3a16055b9420dd78291b2b22ae0667acdb81d3c53ab16500c77fbeb4f481f7d",
+      "health": 200
+    }
+  },
+  "result": "PASS",
+  "scope": "Complete Wardn protocol shared by Chat browser/mobile/desktop, Peek, Lanner CN/global and Corpus; application transactions, business permissions and accounts retained.",
+  "cleanup": {
+    "chat_logout": true,
+    "peek_logout": true,
+    "lanner_logout": true,
+    "corpus_tokens_revoked": true,
+    "synthetic_wardn_user_deleted": true,
+    "absence_verified": true,
+    "native_audit_projections_retained": true
+  }
+}

@@ -71,7 +71,9 @@ change set.
 新应用对接 Wardn 使用独立 module `github.com/saker-ai/saker-common/wardn`，不引入根 module 的旧 IAM 和存储实现。
 
 ```sh
-go get github.com/saker-ai/saker-common/wardn@v0.1.0
+go get github.com/saker-ai/saker-common/wardn@v0.2.0
 ```
 
 导入 `github.com/saker-ai/saker-common/wardn`。API 与验证规则见 [SDK 说明](wardn/README.md)，应用排查、适配边界和发布状态见 [接入方案](docs/wardn-sdk-integration.md)。根 module 的测试不覆盖此子 module；请另执行 `cd wardn && GOWORK=off go test -race ./...`。
+
+完整接入已发布，见 [SDK v0.2.0 线上验收](docs/wardn-sdk-rollout-20261117.md)。
