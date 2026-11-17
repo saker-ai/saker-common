@@ -6,6 +6,7 @@ const (
 	AudienceChatHub   = "chathub"
 	AudienceFileStore = "filestore"
 	AudienceSaker     = "saker"
+	AudienceSakerWeb  = "sakerweb"
 	AudienceSynapse   = "synapse"
 	AudienceWebHub    = "webhub"
 	AudienceAIHub     = "aihub"
@@ -43,6 +44,10 @@ const (
 	ScopeFileStoreAdmin = "filestore:admin"
 
 	ScopeSakerRun         = "saker:run"
+	ScopeSakerWebRead     = "sakerweb:read"
+	ScopeSakerWebWrite    = "sakerweb:write"
+	ScopeSakerWebRun      = "sakerweb:run"
+	ScopeSakerWebTerminal = "sakerweb:terminal"
 	ScopeSakerToolExecute = "saker:tool:execute"
 	ScopeSakerToolApprove = "saker:tool:approve"
 
@@ -85,6 +90,8 @@ func DefaultScopesForAudience(audience string) []string {
 		return []string{ScopeFileStoreRead, ScopeFileStoreWrite}
 	case AudienceSaker:
 		return []string{ScopeSakerRun, ScopeSakerToolExecute}
+	case AudienceSakerWeb:
+		return []string{ScopeSakerWebRead, ScopeSakerWebWrite, ScopeSakerWebRun, ScopeSakerWebTerminal}
 	case AudienceWebHub:
 		return []string{ScopeWebHubNotificationsWrite}
 	case AudienceAIHub:

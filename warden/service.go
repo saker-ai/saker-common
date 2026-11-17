@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -17,17 +18,23 @@ import (
 )
 
 type Config struct {
-	Issuer                    string
-	MasterSecret              string
-	InternalTTL               time.Duration
-	AgentTTL                  time.Duration
-	SessionTTL                time.Duration
-	APIKeyPrefix              string
-	Policy                    Policy
-	PolicyVersion             string
-	OIDCVerifier              *OIDCVerifier
-	OIDCTokenExchanger        OIDCTokenExchanger
-	DirectorySource           DirectorySource
+	Issuer             string
+	MasterSecret       string
+	InternalTTL        time.Duration
+	AgentTTL           time.Duration
+	SessionTTL         time.Duration
+	APIKeyPrefix       string
+	Policy             Policy
+	PolicyVersion      string
+	OIDCVerifier       *OIDCVerifier
+	OIDCTokenExchanger OIDCTokenExchanger
+	// OIDCFactory defers discovery until managed Casdoor and ingress are up.
+	OIDCFactory     func(context.Context) (*OIDCClient, error)
+	OIDCRedirectURL string
+	DirectorySource DirectorySource
+	// DirectoryRefreshOnSession fails closed against the current directory on
+	// each session validation. Enable for a dynamic Casdoor directory source.
+	DirectoryRefreshOnSession bool
 	RegistrationPolicy        string
 	EmailVerificationRequired bool
 	Mailer                    Mailer
@@ -50,9 +57,20 @@ type Service struct {
 	mailer             Mailer
 	securityNotifier   SecurityNotifier
 	templates          *TemplateRegistry
+	oidcGate           chan struct{}
+	oidcClient         *OIDCClient
+	oidcRetryAfter     time.Time
 }
 
 func NewService(cfg Config, store Store) (*Service, error) {
+	if cfg.OIDCFactory != nil {
+		if cfg.OIDCVerifier != nil || cfg.OIDCTokenExchanger != nil {
+			return nil, errors.New("OIDC factory cannot coexist with a second verifier or exchanger")
+		}
+		if _, err := oidcEndpoint(cfg.OIDCRedirectURL); err != nil {
+			return nil, err
+		}
+	}
 	if store == nil {
 		store = NewMemoryStore()
 	}
@@ -97,12 +115,22 @@ func NewService(cfg Config, store Store) (*Service, error) {
 	if templates == nil {
 		templates = DefaultTemplateRegistry()
 	}
-	return &Service{
+	service := &Service{
 		cfg: cfg, store: store, signer: signer, policy: policy, policyVersion: strings.TrimSpace(cfg.PolicyVersion),
 		registrationPolicy: normalizeRegistrationPolicy(cfg.RegistrationPolicy),
 		oidcVerifier:       cfg.OIDCVerifier, tokenExchanger: cfg.OIDCTokenExchanger, directory: cfg.DirectorySource,
 		mailer: mailer, securityNotifier: securityNotifier, templates: templates,
-	}, nil
+		oidcGate: make(chan struct{}, 1),
+	}
+	if cfg.DirectoryRefreshOnSession && cfg.DirectorySource == nil {
+		return nil, errors.New("directory refresh requires a directory source")
+	}
+	if source, ok := cfg.DirectorySource.(*CasdoorDirectorySource); ok {
+		if err := source.bind(service); err != nil {
+			return nil, err
+		}
+	}
+	return service, nil
 }
 
 func (s *Service) Store() Store { return s.store }
@@ -213,7 +241,27 @@ func (s *Service) PutOIDCLoginState(ctx context.Context, state OIDCLoginState) e
 }
 
 func (s *Service) StartOIDCLogin(ctx context.Context, req StartOIDCLoginRequest) (StartedOIDCLogin, error) {
-	if s.oidcVerifier == nil || strings.TrimSpace(s.oidcVerifier.Issuer) == "" || strings.TrimSpace(s.oidcVerifier.ClientID) == "" {
+	if req.BrowserBinding != "" {
+		if _, ok := s.store.(boundOIDCStateTaker); !ok {
+			return StartedOIDCLogin{}, ErrInvalidInput
+		}
+	}
+	authority, _, err := s.resolveOIDC(ctx)
+	if err != nil {
+		return StartedOIDCLogin{}, err
+	}
+	if authority == nil || strings.TrimSpace(authority.Issuer) == "" || strings.TrimSpace(authority.ClientID) == "" {
+		return StartedOIDCLogin{}, ErrInvalidInput
+	}
+	if !validOIDCReturnTo(req.RedirectURL) {
+		return StartedOIDCLogin{}, ErrInvalidInput
+	}
+	authorizationURL := authority.AuthorizationURL
+	if authorizationURL == "" {
+		authorizationURL = strings.TrimRight(authority.Issuer, "/") + "/login/oauth/authorize"
+	}
+	authURL, err := oidcEndpoint(authorizationURL)
+	if err != nil {
 		return StartedOIDCLogin{}, ErrInvalidInput
 	}
 	now := normalizeNow(req.Now)
@@ -224,16 +272,19 @@ func (s *Service) StartOIDCLogin(ctx context.Context, req StartOIDCLoginRequest)
 	expiresAt := now.Add(10 * time.Minute)
 	if err := s.store.PutOIDCLoginState(ctx, OIDCLoginState{
 		State: state, Nonce: nonce, CodeVerifier: verifier, RedirectURL: req.RedirectURL, ExpiresAt: expiresAt,
+		BrowserBinding: oidcBindingHash(req.BrowserBinding),
 	}); err != nil {
 		return StartedOIDCLogin{}, err
 	}
-	authURL, err := url.Parse(strings.TrimRight(s.oidcVerifier.Issuer, "/") + "/login/oauth/authorize")
-	if err != nil {
-		return StartedOIDCLogin{}, err
-	}
 	q := authURL.Query()
-	q.Set("client_id", s.oidcVerifier.ClientID)
+	q.Set("client_id", authority.ClientID)
 	q.Set("response_type", "code")
+	if authority.RedirectURL != "" {
+		q.Set("redirect_uri", authority.RedirectURL)
+	}
+	if authority.ProviderHint != "" {
+		q.Set("provider_hint", authority.ProviderHint)
+	}
 	q.Set("scope", "openid profile email")
 	q.Set("state", state)
 	q.Set("nonce", nonce)
@@ -340,7 +391,21 @@ func (s *Service) ExchangeDeviceToken(ctx context.Context, req DeviceTokenReques
 }
 
 func (s *Service) CompleteOIDCCallback(ctx context.Context, code, stateValue string, now time.Time) (Session, IdentityContext, string, error) {
-	if s.oidcVerifier == nil || s.tokenExchanger == nil || s.directory == nil {
+	return s.completeOIDCCallback(ctx, code, stateValue, "", false, now)
+}
+
+// CompleteBoundOIDCCallback is the browser HTTP entry. Legacy unbound state
+// cannot be used here. CompleteOIDCCallback remains for trusted Go clients.
+func (s *Service) CompleteBoundOIDCCallback(ctx context.Context, code, stateValue, browserBinding string, now time.Time) (Session, IdentityContext, string, error) {
+	return s.completeOIDCCallback(ctx, code, stateValue, browserBinding, true, now)
+}
+
+func (s *Service) completeOIDCCallback(ctx context.Context, code, stateValue, browserBinding string, requireBinding bool, now time.Time) (Session, IdentityContext, string, error) {
+	authority, exchanger, err := s.resolveOIDC(ctx)
+	if err != nil {
+		return Session{}, IdentityContext{}, "", err
+	}
+	if authority == nil || exchanger == nil || s.directory == nil {
 		return Session{}, IdentityContext{}, "", ErrInvalidInput
 	}
 	code = strings.TrimSpace(code)
@@ -348,19 +413,30 @@ func (s *Service) CompleteOIDCCallback(ctx context.Context, code, stateValue str
 	if code == "" || stateValue == "" {
 		return Session{}, IdentityContext{}, "", ErrInvalidInput
 	}
-	state, err := s.store.TakeOIDCLoginState(ctx, stateValue)
+	var state OIDCLoginState
+	if store, ok := s.store.(boundOIDCStateTaker); ok {
+		state, err = store.TakeBoundOIDCLoginState(ctx, stateValue, oidcBindingHash(browserBinding))
+	} else if requireBinding {
+		return Session{}, IdentityContext{}, "", ErrInvalidInput
+	} else {
+		state, err = s.store.TakeOIDCLoginState(ctx, stateValue)
+	}
 	if err != nil {
+		return Session{}, IdentityContext{}, "", ErrUnauthorized
+	}
+	if requireBinding && (browserBinding == "" || state.BrowserBinding == "") ||
+		subtle.ConstantTimeCompare([]byte(state.BrowserBinding), []byte(oidcBindingHash(browserBinding))) != 1 {
 		return Session{}, IdentityContext{}, "", ErrUnauthorized
 	}
 	now = normalizeNow(now)
 	if !state.ExpiresAt.IsZero() && !now.Before(state.ExpiresAt) {
 		return Session{}, IdentityContext{}, "", ErrUnauthorized
 	}
-	tokens, err := s.tokenExchanger.ExchangeCode(ctx, code, state.CodeVerifier)
+	tokens, err := exchanger.ExchangeCode(ctx, code, state.CodeVerifier)
 	if err != nil {
 		return Session{}, IdentityContext{}, "", err
 	}
-	claims, err := s.oidcVerifier.VerifyIDToken(ctx, tokens.IDToken, state.Nonce)
+	claims, err := authority.VerifyTokenSet(ctx, tokens, state.Nonce)
 	if err != nil {
 		return Session{}, IdentityContext{}, "", err
 	}
@@ -382,11 +458,39 @@ func (s *Service) CompleteOIDCCallback(ctx context.Context, code, stateValue str
 	return session, identity, state.RedirectURL, nil
 }
 
+func oidcBindingHash(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	hash := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(hash[:])
+}
+
+type boundOIDCStateTaker interface {
+	TakeBoundOIDCLoginState(context.Context, string, string) (OIDCLoginState, error)
+}
+
+func validOIDCReturnTo(raw string) bool {
+	if raw == "" {
+		return true
+	}
+	u, err := url.Parse(raw)
+	return err == nil && !u.IsAbs() && u.Host == "" && strings.HasPrefix(raw, "/") &&
+		!strings.HasPrefix(u.Path, "//") && !strings.ContainsAny(raw+u.Path, "\\\r\n")
+}
+
 func (s *Service) CreateSession(ctx context.Context, principalID string, now time.Time) (Session, error) {
 	now = normalizeNow(now)
 	principal, err := s.store.GetPrincipal(ctx, principalID)
 	if err != nil {
 		return Session{}, err
+	}
+	tenant, err := s.store.GetTenant(ctx, principal.TenantID)
+	if err != nil {
+		return Session{}, err
+	}
+	if tenant.Status == PrincipalStatusDisabled {
+		return Session{}, ErrDisabled
 	}
 	if principal.Status == "disabled" {
 		return Session{}, ErrDisabled
@@ -418,9 +522,25 @@ func (s *Service) ValidateSession(ctx context.Context, sessionID string, now tim
 		_ = s.store.DeleteSession(ctx, session.ID)
 		return Session{}, Principal{}, ErrUnauthorized
 	}
+	tenant, err := s.store.GetTenant(ctx, session.TenantID)
+	if err != nil || tenant.Status == PrincipalStatusDisabled {
+		return Session{}, Principal{}, ErrUnauthorized
+	}
 	principal, err := s.store.GetPrincipal(ctx, session.PrincipalID)
 	if err != nil {
 		return Session{}, Principal{}, ErrUnauthorized
+	}
+	if principal.TenantID != session.TenantID {
+		return Session{}, Principal{}, ErrUnauthorized
+	}
+	if s.cfg.DirectoryRefreshOnSession && principal.CasdoorUserID != "" {
+		principal, err = s.refreshDirectoryPrincipal(ctx, principal)
+		if err != nil {
+			if errors.Is(err, ErrDirectoryUnavailable) {
+				return Session{}, Principal{}, ErrDirectoryUnavailable
+			}
+			return Session{}, Principal{}, ErrUnauthorized
+		}
 	}
 	if principal.Status == "disabled" {
 		return Session{}, Principal{}, ErrDisabled
@@ -594,10 +714,14 @@ func (s *Service) SignInternalJWT(ctx context.Context, req InternalJWTRequest) (
 }
 
 func (s *Service) signInternalJWTForClientCredentials(ctx context.Context, req InternalJWTRequest) (InternalJWTResult, error) {
-	if s.oidcVerifier == nil {
+	authority, _, err := s.resolveOIDC(ctx)
+	if err != nil {
+		return InternalJWTResult{}, err
+	}
+	if authority == nil {
 		return InternalJWTResult{}, ErrInvalidInput
 	}
-	claims, err := s.oidcVerifier.VerifyIDToken(ctx, req.ClientCredentialsToken, "")
+	claims, err := authority.VerifyIDToken(ctx, req.ClientCredentialsToken, "")
 	if err != nil {
 		return InternalJWTResult{}, err
 	}
@@ -611,8 +735,17 @@ func (s *Service) signInternalJWTForClientCredentials(ctx context.Context, req I
 	}
 	now := normalizeNow(req.Now)
 	tenant := Tenant{ID: tenantID, Slug: tenantID, DisplayName: tenantID, Status: "active"}
-	if err := s.store.UpsertTenant(ctx, tenant); err != nil {
-		return InternalJWTResult{}, err
+	existingTenant, tenantErr := s.store.GetTenant(ctx, tenantID)
+	if tenantErr == nil && existingTenant.Status == PrincipalStatusDisabled {
+		return InternalJWTResult{}, ErrDisabled
+	}
+	if tenantErr != nil {
+		if !errors.Is(tenantErr, ErrNotFound) {
+			return InternalJWTResult{}, tenantErr
+		}
+		if err := s.store.UpsertTenant(ctx, tenant); err != nil {
+			return InternalJWTResult{}, err
+		}
 	}
 	principalID := StableProjectionID("svc", tenantID, claims.Subject)
 	name := claims.PreferredName

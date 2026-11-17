@@ -79,12 +79,14 @@ func TestHTTPHandlerOIDCCallbackSetsSessionCookie(t *testing.T) {
 	svc, _ := newOIDCTestService(t)
 	if err := svc.PutOIDCLoginState(ctx, OIDCLoginState{
 		State: "state-a", Nonce: "nonce-a", CodeVerifier: "verifier-a", ExpiresAt: testNow().Add(24 * time.Hour),
+		BrowserBinding: oidcBindingHash("browser-binding"),
 	}); err != nil {
 		t.Fatal(err)
 	}
 	handler := NewHTTPHandler(svc)
 	req := httptest.NewRequest(http.MethodGet, "/auth/oidc/callback?code=code-a&state=state-a", nil)
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.AddCookie(&http.Cookie{Name: handler.oidcCookieName("state-a", req), Value: "browser-binding"})
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

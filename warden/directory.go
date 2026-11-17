@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"strings"
 
 	"github.com/saker-ai/saker-common/internaljwt"
@@ -17,6 +18,16 @@ func (s *Service) SyncDirectorySnapshot(ctx context.Context, snapshot CasdoorDir
 		return Principal{}, ErrInvalidInput
 	}
 	tenant := snapshot.Tenant
+	existingTenant, err := s.store.GetTenant(ctx, tenant.ID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return Principal{}, err
+	}
+	if err == nil && existingTenant.Status == PrincipalStatusDisabled {
+		tenant.Status = PrincipalStatusDisabled
+	}
+	if err == nil && existingTenant.CasdoorOrgName != "" && existingTenant.CasdoorOrgName != tenant.CasdoorOrgName {
+		return Principal{}, ErrInvalidInput
+	}
 	if tenant.Status == "" {
 		tenant.Status = "active"
 	}
@@ -48,6 +59,9 @@ func (s *Service) SyncDirectorySnapshot(ctx context.Context, snapshot CasdoorDir
 		})
 	}
 	existing, existingErr := s.store.GetPrincipal(ctx, principal.ID)
+	if existingErr != nil && !errors.Is(existingErr, ErrNotFound) {
+		return Principal{}, existingErr
+	}
 	existingExists := existingErr == nil && existing.ID != ""
 	if existingExists {
 		principal.Status = existing.Status
@@ -80,6 +94,11 @@ func (s *Service) SyncDirectoryUser(ctx context.Context, source DirectorySource,
 	if err != nil {
 		return nil, err
 	}
+	for _, snapshot := range snapshots {
+		if snapshot.User.ID != casdoorUserID {
+			return nil, ErrUnauthorized
+		}
+	}
 	principals := make([]Principal, 0, len(snapshots))
 	for _, snapshot := range snapshots {
 		principal, err := s.SyncDirectorySnapshot(ctx, snapshot)
@@ -89,6 +108,30 @@ func (s *Service) SyncDirectoryUser(ctx context.Context, source DirectorySource,
 		principals = append(principals, principal)
 	}
 	return principals, nil
+}
+
+func (s *Service) refreshDirectoryPrincipal(ctx context.Context, principal Principal) (Principal, error) {
+	principals, err := s.SyncDirectoryUser(ctx, s.directory, principal.CasdoorUserID)
+	if err != nil {
+		return Principal{}, err
+	}
+	for _, refreshed := range principals {
+		if refreshed.ID == principal.ID {
+			return refreshed, nil
+		}
+	}
+	return Principal{}, s.revokeDirectoryPrincipal(ctx, principal)
+}
+
+func (s *Service) revokeDirectoryPrincipal(ctx context.Context, principal Principal) error {
+	if err := s.store.UpdatePrincipalStatus(ctx, principal.ID, PrincipalStatusDisabled); err != nil {
+		return err
+	}
+	if err := s.store.DeleteSessionsByPrincipal(ctx, principal.ID); err != nil {
+		return err
+	}
+	s.audit(ctx, principal, "directory.membership_revoked", nil, "deny", "")
+	return ErrUnauthorized
 }
 
 func (s *Service) ReconcileDirectory(ctx context.Context) error {

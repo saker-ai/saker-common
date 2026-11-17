@@ -28,6 +28,26 @@ Import path:
 import corewarden "github.com/saker-ai/saker-common/warden"
 ```
 
+Browser OIDC, PKCE exchange, dynamic Casdoor directory projection and SakerWeb
+policy setup are described in [OIDC and directory integration](docs/oidc-directory.md).
+
+### `discovery`
+
+Service registration and discovery contracts, environment-based resolution,
+Consul, Redis and mDNS helpers live in [discovery/](discovery/).
+
+### `webhub/notify`
+
+The WebHub notification HTTP client and its tests live in
+[webhub/notify/](webhub/notify/).
+
+## Development
+
+The current module requires Go 1.26.4 or newer. Run `go test ./...` from
+this module for the package suite; external OIDC/directory integration
+tests have their own environment requirements. Shared library tests are
+not evidence that every downstream service integration has been deployed.
+
 ## Versioning
 
 This module is consumed by service repositories through tagged Go module
