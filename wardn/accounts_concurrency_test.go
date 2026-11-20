@@ -183,3 +183,56 @@ func TestAccountsCaptureAlwaysValidatesTokenAndKeepsInflightBudget(t *testing.T)
 		t.Fatalf("cache budget exceeded: calls=%d err=%v", calls, err)
 	}
 }
+
+func TestAccountsCanceledOwnerDoesNotPoisonLiveWaiters(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusForbidden, http.StatusServiceUnavailable} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				var calls atomic.Int64
+				a := testAccounts(t, func(r *http.Request) (*http.Response, error) {
+					if calls.Add(1) == 1 {
+						<-r.Context().Done()
+						return nil, r.Context().Err()
+					}
+					return accountResponse(0, status), nil
+				})
+				owner, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				ownerResult := make(chan error, 1)
+				go func() { _, err := a.Check(owner, "user", 0); ownerResult <- err }()
+				synctest.Wait()
+				var waiters sync.WaitGroup
+				var want error
+				if status == http.StatusForbidden {
+					want = ErrRevoked
+				}
+				if status == http.StatusServiceUnavailable {
+					want = ErrUnavailable
+				}
+				for range 16 {
+					waiters.Go(func() {
+						_, err := a.Check(t.Context(), "user", 0)
+						if !errors.Is(err, want) {
+							t.Errorf("live waiter inherited abandoned query: %v, want %v", err, want)
+						}
+					})
+				}
+				synctest.Wait()
+				cancel()
+				ownerErr := <-ownerResult
+				waiters.Wait()
+				if !errors.Is(ownerErr, ErrUnavailable) || !errors.Is(ownerErr, context.Canceled) {
+					t.Errorf("owner cancellation lost: %v", ownerErr)
+				}
+				// Successful state is reused; a genuine failed authority read may be retried
+				// by later arriving callers, but none may inherit the canceled owner's result.
+				if status == http.StatusOK && calls.Load() != 2 {
+					t.Fatalf("coalesced successful recovery calls=%d", calls.Load())
+				}
+				if calls.Load() < 2 {
+					t.Fatal("live callers never revalidated original authority")
+				}
+			})
+		})
+	}
+}
