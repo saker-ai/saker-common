@@ -38,10 +38,11 @@ func (s AccountState) Profile() Claims {
 }
 
 type accountSnapshot struct {
-	state AccountState
-	err   error
-	until time.Time
-	done  chan struct{}
+	state     AccountState
+	err       error
+	until     time.Time
+	done      chan struct{}
+	abandoned bool
 }
 
 // Accounts 是按 issuer/client/region 配置隔离的原生账号客户端。
@@ -148,9 +149,14 @@ func (a *Accounts) current(ctx context.Context, subject string) (AccountState, e
 			select {
 			case <-done:
 				a.mu.Lock()
-				state, err, until := entry.state, entry.err, entry.until
+				state, err, until, abandoned := entry.state, entry.err, entry.until, entry.abandoned
 				current := a.cache[subject] == entry
 				a.mu.Unlock()
+				// A disconnected caller does not define the account state for
+				// independent live executions waiting on its coalesced read.
+				if abandoned {
+					continue
+				}
 				if err != nil {
 					return AccountState{}, err
 				}
@@ -175,6 +181,10 @@ func (a *Accounts) current(ctx context.Context, subject string) (AccountState, e
 		a.mu.Unlock()
 		state, err := a.fetch(ctx, subject, "")
 		a.mu.Lock()
+		if ctx.Err() != nil {
+			state, err = AccountState{}, errors.Join(ErrUnavailable, ctx.Err())
+			entry.abandoned = true
+		}
 		entry.state, entry.err = state, err
 		a.generation++
 		if err == nil {
