@@ -219,10 +219,11 @@ func TestAccountsCanceledOwnerDoesNotPoisonLiveWaiters(t *testing.T) {
 				}
 				synctest.Wait()
 				cancel()
-				if err := <-ownerResult; !errors.Is(err, ErrUnavailable) || !errors.Is(err, context.Canceled) {
-					t.Fatalf("owner cancellation lost: %v", err)
-				}
+				ownerErr := <-ownerResult
 				waiters.Wait()
+				if !errors.Is(ownerErr, ErrUnavailable) || !errors.Is(ownerErr, context.Canceled) {
+					t.Errorf("owner cancellation lost: %v", ownerErr)
+				}
 				// Successful state is reused; a genuine failed authority read may be retried
 				// by later arriving callers, but none may inherit the canceled owner's result.
 				if status == http.StatusOK && calls.Load() != 2 {
